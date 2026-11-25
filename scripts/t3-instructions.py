@@ -6,12 +6,9 @@ import json
 import os
 from pathlib import Path
 import tempfile
-import tomllib
 
 
-CODEX_MARKER = '<dotfiles-t3-developer-instructions>'
 CLAUDE_MARKER = '<dotfiles-preserved-claude-append>'
-OVERRIDE = 'T3CODE_CODEX_LAUNCH_ARGS'
 NATIVE_CONTROLS = {'pi': [['--approve']]}
 CLAUDE_DEPTH = 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH'
 
@@ -72,57 +69,17 @@ def flag_values(arguments, names):
     return values
 
 
-def config_overrides(arguments):
-    return flag_values(arguments, ('-c', '--config'))
-
-
-def config_value(value):
-    try:
-        return tomllib.loads('value = ' + value)['value']
-    except tomllib.TOMLDecodeError:
-        # Codex likewise accepts a bare string when TOML parsing fails.
-        return value
-
-
-def instruction_config(home, provider, arguments, environment):
-    config = provider.get('config', {})
-    home_path = config.get('homePath') or environment.get('CODEX_HOME') or str(home / '.codex')
-    if not isinstance(home_path, str):
-        raise ValueError('Codex homePath must be a string.')
-    if home_path == '~' or home_path.startswith(('~/', '~\\')):
-        home_path = str(home / home_path[2:])
-    path = Path(home_path) / 'config.toml'
-    document = tomllib.loads(path.read_text(encoding='utf-8')) if path.is_file() else {}
-    profiles = flag_values(arguments, ('--profile', '-p'))
-    profile = profiles[-1] if profiles else document.get('profile')
-    overrides = config_overrides(arguments)
-    for value in overrides:
-        key, separator, text = value.partition('=')
-        if separator and key.strip() == 'profile':
-            profile = config_value(text)
-    if profile:
-        document = {**document, **document.get('profiles', {}).get(profile, {})}
-    developer = document.get('developer_instructions', '')
-    for value in overrides:
-        key, separator, text = value.partition('=')
-        if separator and key.strip() == 'developer_instructions':
-            developer = config_value(text)
-    if not isinstance(developer, str):
-        raise ValueError('Existing Codex developer instructions must be text.')
-    return developer
-
-
 def clean_owned(arguments, addition_file):
     result = []
     index = 0
     while index < len(arguments):
         argument = arguments[index]
-        if argument in ('-c', '--config', '--append-system-prompt', '--append-system-prompt-file'):
+        if argument in ('--append-system-prompt', '--append-system-prompt-file'):
             following = arguments[index + 1] if index + 1 < len(arguments) else ''
-            if following == str(addition_file) or CODEX_MARKER in following or CLAUDE_MARKER in following:
+            if following == str(addition_file) or CLAUDE_MARKER in following:
                 index += 2
                 continue
-        if CODEX_MARKER in argument or CLAUDE_MARKER in argument:
+        if CLAUDE_MARKER in argument:
             index += 1
             continue
         result.append(argument)
@@ -176,9 +133,7 @@ def publish(path, document):
         Path(temporary).unlink(missing_ok=True)
 
 
-def apply(destination, environment=None, hidden_models=()):
-    environment = {environment_key(key): value for key, value in
-                   (os.environ if environment is None else environment).items()}
+def apply(destination, hidden_models=()):
     home = Path(destination)
     settings_path = home / '.t3/userdata/settings.json'
     state_path = settings_path.with_name('dotfiles-launch-state.json')
@@ -192,7 +147,7 @@ def apply(destination, environment=None, hidden_models=()):
     records = state.get('providers', {})
     next_records = {}
     changed = False
-    for name, harness in (('codex', 'codex'), ('claudeAgent', 'claude'), ('pi', 'pi')):
+    for name, harness in (('claudeAgent', 'claude'), ('pi', 'pi')):
         if name not in providers:
             continue
         provider = providers[name]
@@ -228,16 +183,6 @@ def apply(destination, environment=None, hidden_models=()):
         if old and base_environment == old.get('lastEnvironment'):
             base_environment = old['baseEnvironment']
             had_environment = old['hadEnvironment']
-        elif name == 'codex' and old and isinstance(base_environment, list):
-            reserved = [entry for entry in base_environment if isinstance(entry, dict)
-                        and environment_key(str(entry.get('name', ''))) == OVERRIDE]
-            previous = [entry for entry in old.get('lastEnvironment', []) if environment_key(entry['name']) == OVERRIDE]
-            if reserved == previous:
-                base_environment = [entry for entry in base_environment if environment_key(str(entry.get('name', ''))) != OVERRIDE]
-                for index, entry in enumerate(old['baseEnvironment']):
-                    if environment_key(entry['name']) == OVERRIDE:
-                        base_environment.insert(min(index, len(base_environment)), entry)
-                had_environment = old['hadEnvironment'] or bool(base_environment)
         if not isinstance(base_environment, list) or any(
                 not isinstance(entry, dict) or not isinstance(entry.get('name'), str) for entry in base_environment):
             raise ValueError('Native provider environment must contain named entries.')
@@ -246,31 +191,10 @@ def apply(destination, environment=None, hidden_models=()):
                 config['launchArgs'] = base
             else:
                 config.pop('launchArgs', None)
-            if name == 'codex':
-                if had_environment:
-                    provider['environment'] = base_environment
-                else:
-                    provider.pop('environment', None)
             changed = True
             continue
         arguments = tokenize(base)
-        if name == 'codex':
-            effective = dict(environment)
-            for entry in base_environment:
-                if environment_key(entry['name']) in (OVERRIDE, 'CODEX_HOME'):
-                    if not isinstance(entry.get('value'), str):
-                        raise ValueError('Instruction environment overrides require text values during apply.')
-                    effective[environment_key(entry['name'])] = entry['value']
-            override = effective.get(OVERRIDE, '')
-            if override.strip():
-                arguments = clean_owned(tokenize(override), addition_file)
-            developer = instruction_config(home, provider, arguments, effective)
-            combined = '\n\n'.join(value for value in (developer, CODEX_MARKER + '\n' + addition.rstrip()
-                + '\n</dotfiles-t3-developer-instructions>') if value)
-            arguments += ['-c', 'developer_instructions=' + json.dumps(combined, ensure_ascii=False)]
-            provider['environment'] = [entry for entry in base_environment if environment_key(entry['name']) != OVERRIDE]
-            provider['environment'].append({'name': OVERRIDE, 'value': '', 'sensitive': False})
-        elif name == 'claudeAgent':
+        if name == 'claudeAgent':
             files = flag_values(arguments, ('--append-system-prompt-file',))
             inline = flag_values(arguments, ('--append-system-prompt',))
             preserved = []

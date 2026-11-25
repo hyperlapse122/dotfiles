@@ -1,10 +1,9 @@
 /*
   T3 Code, one artifact per trait: my.t3.cli.enable installs the
   headless `t3` CLI and my.t3.desktop.enable the desktop app. Its Claude
-  and Codex sessions run the flake's own claude and codex with their
-  user-level settings, so nothing here adds a copy of either. OpenCode and Pi
-  run the flake's own builds through the user profile. The T3 Code
-  declared settings are merged into its
+  sessions run the flake's own claude with its user-level settings, so
+  nothing here adds a copy. OpenCode and Pi run the flake's own builds
+  through the user profile. The T3 Code declared settings are merged into its
   own settings files on activation.
 */
 {
@@ -60,7 +59,6 @@ let
   renderer = import ../../packages/text-template.nix { inherit pkgs; };
   harnesses = [
     "claude"
-    "codex"
     "pi"
     "opencode"
   ];
@@ -99,28 +97,6 @@ let
         driver = "claudeAgent";
         enabled = true;
         config.idleCompaction = "beforeCacheExpires";
-      };
-      # The codex on PATH is the packaged wrapper, so no binaryPath is needed.
-      # Codex reads the baseline from ~/.codex/AGENTS.md. The composer adds
-      # T3 context through its native developer-instructions launch option.
-      #
-      # T3 Code gives a Codex instance its own home only when its config names
-      # one: a homePath, a shadowHomePath, or the "managed" setupMode. The
-      # merge keeps every field not declared here, so one set in the app would
-      # survive every apply. An empty homePath would still let a CODEX_HOME in
-      # the instance's own environment, which the merge also keeps, choose the
-      # home, because T3 Code sets CODEX_HOME only for a nonempty homePath.
-      # Declaring homePath as ~/.codex, which T3 Code expands, and the
-      # non-managed "existing" setupMode keeps the sessions on ~/.codex, where
-      # the plugin sync and home/h82/agents/skills.nix install. shadowHomePath stays
-      # undeclared: a shadow home shares skills and plugins with ~/.codex.
-      codex = {
-        driver = "codex";
-        enabled = true;
-        config = {
-          homePath = "~/.codex";
-          setupMode = "existing";
-        };
       };
       # T3 Code recreates an enabled Grok instance from session history when
       # the default instance is absent. Keep an explicit disable here.
@@ -223,6 +199,15 @@ let
       path = [ "providerInstances" ];
       key = "omp-codex";
     }
+    {
+      path = [ "providerInstances" ];
+      key = "codex";
+    }
+    {
+      path = [ "providers" ];
+      key = "codex";
+      prune = true;
+    }
   ];
 
   # providers is the retired per-kind block T3 Code moves into
@@ -317,7 +302,18 @@ let
     t3codeClientSettings = {
       file = "client-settings.json";
       declared = pkgs.writeText "t3code-declared-client-settings.json" (
-        builtins.toJSON (declaration clientSettings)
+        builtins.toJSON (
+          (declaration clientSettings)
+          // {
+            removePaths = [
+              {
+                path = [ "providerModelPreferences" ];
+                key = "codex";
+                prune = true;
+              }
+            ];
+          }
+        )
       );
     };
   };
@@ -354,8 +350,7 @@ in
   home.activation = lib.mkIf t3 (
     {
       t3codeInstructions =
-        lib.hm.dag.entryAfter
-          [ "t3codeSettings" "t3codeClientSettings" "agentInstructions" "codexSettings" ]
+        lib.hm.dag.entryAfter [ "t3codeSettings" "t3codeClientSettings" "agentInstructions" ]
           ''
             if [[ ! -v DRY_RUN ]]; then
               install -d -m 700 "${config.home.homeDirectory}/.t3/userdata/instructions"

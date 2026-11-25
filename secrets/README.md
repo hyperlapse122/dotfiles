@@ -66,7 +66,7 @@ file is a flat YAML map of strings.
 | `git-hosting.yaml` | `gitlab_token`, `jpi_token` | GitLab CLI and registry credential helper |
 | `docker-registry.yaml` | `docker_token` | Docker Hub registry helper, NixOS opt-in |
 | `provider-services.yaml` | `tokscale_token` | Tokscale wrapper |
-| `provider-services.yaml` | `synthetic_api_key`, `openai_api_key`, `anthropic_api_key` | Pi, OpenCode, and omp |
+| `provider-services.yaml` | `synthetic_api_key`, `anthropic_api_key` | Pi, OpenCode, and omp |
 | `provider-services.yaml` | `exa_api_key`, `openrouter_api_key` | Pi and omp |
 | `provider-services.yaml` | `opencode_go_api_key` | OpenCode and omp |
 
@@ -80,8 +80,7 @@ publication from `secrets/docker-registry.yaml` to
 `/run/secrets/cli-auth/docker_token` once the ciphertext is provisioned.
 
 `pi-state`, `opencode-auth-sync`, and `omp-auth-sync` read the published provider keys. The
-scheduled catalog job still needs the `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`
-Actions secrets. For registry pulls, `github_token` needs `read:packages` or
+scheduled catalog job still needs the `ANTHROPIC_API_KEY` Actions secret. For registry pulls, `github_token` needs `read:packages` or
 `write:packages`, and `gitlab_token` needs `read_registry` or `write_registry`.
 Public usernames live in [cli-accounts.nix](../modules/shared/cli-accounts.nix).
 
@@ -103,12 +102,12 @@ export SOPS_AGE_KEY_CMD="sh -c 'for f in secrets/bootstrap/*/age-key.asc; do gpg
 ```
 
 Use the manifest to select the file and field. For example, paste a rotated
-OpenAI key at the terminal prompt. The value goes to SOPS through the pipe.
+Anthropic key at the terminal prompt. The value goes to SOPS through the pipe.
 
 ```sh
 set -o pipefail
 python3 -c 'import getpass, json, warnings; warnings.simplefilter("error", getpass.GetPassWarning); print(json.dumps(getpass.getpass("New value: ")))' \
-  | sops set --value-stdin secrets/provider-services.yaml '["openai_api_key"]'
+  | sops set --value-stdin secrets/provider-services.yaml '["anthropic_api_key"]'
 ```
 
 For a new field, add its manifest entry and provision the encrypted value in

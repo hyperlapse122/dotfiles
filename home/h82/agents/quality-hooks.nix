@@ -25,15 +25,13 @@ let
     (toString policy)
     harness
   ];
-  codex = harness == "codex";
-  edit = if codex then "apply_patch" else "Edit|Write|MultiEdit";
-  shell = if codex then "Bash|exec_command|shell_command" else "Bash";
+  edit = "Edit|Write|MultiEdit";
+  shell = "Bash";
   preTools = lib.concatStringsSep "|" (lib.optional freezeTests edit ++ lib.optional preShell shell);
   identity = {
     statusMessage = "Dotfiles agent quality";
     commandPrefix = "/nix/store/";
     commandSuffix = "-agent-quality-hook/bin/agent-quality-hook";
-    disabledMatcher = "^dotfiles-agent-quality-disabled$";
   };
   group =
     enabled: phase: matcher:
@@ -54,7 +52,6 @@ in
   inherit enable;
   hookGroups = {
     inherit identity;
-    preserveSlots = codex;
     events = {
       PreToolUse = group (preTools != "") "pre" preTools;
       PostToolUse = { };

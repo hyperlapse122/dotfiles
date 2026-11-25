@@ -44,8 +44,8 @@ let
   catalogHelper = helperWithModule ../scripts/catalog_snapshot.py;
   releaseHelper = helperWithModule ../scripts/release_pin.py;
 
-  # tomlkit is what lets the TOML mode rewrite a file such as Codex's
-  # config.toml without dropping the comments and tables it does not own. The
+  # tomlkit is what lets the TOML mode rewrite a file such as config.toml
+  # without dropping the comments and tables it does not own. The
   # flake check runs the source copy of the tests under this same interpreter.
   agentSettingsPython = pkgs.python3.withPackages (ps: [ ps.tomlkit ]);
   agentSettings = helperWith "agent-settings" ../scripts/agent-settings agentSettingsPython;
@@ -67,8 +67,6 @@ let
   agentPluginRelease = pythonHelper "agent-plugin-release" ../scripts/agent-plugin-release;
 
   serveHtml = pythonHelper "serve-html" ../scripts/serve-html;
-
-  chatgptRelease = pythonHelper "chatgpt-release" ../scripts/chatgpt-release;
 
   # Resolves the latest release of Claude Desktop from the Debian APT repository.
   claudeDesktopRelease = pythonHelper "claude-desktop-release" ../scripts/claude-desktop-release;
@@ -99,8 +97,6 @@ let
   });
 
   piRelease = releaseHelper "pi-release" ../scripts/pi-release;
-
-  codexRelease = releaseHelper "codex-release" ../scripts/codex-release;
 
   # Resolves the newest stable OpenCode v2 release from the GitHub release list.
   opencodeRelease = releaseHelper "opencode-release" ../scripts/opencode-release;
@@ -147,8 +143,8 @@ let
   # list.
   opencodeGoModelsWatch = catalogHelper "opencode-go-models-watch" ../scripts/opencode-go-models-watch;
 
-  # Rewrites the committed OpenAI and Anthropic model lists that Pi and
-  # OpenCode declare, from each provider's model list and models.dev.
+  # Rewrites the committed Anthropic model list that Pi and OpenCode declare,
+  # from the provider's model list and models.dev.
   providerModelsWatch = catalogHelper "provider-models-watch" ../scripts/provider-models-watch;
 
   # Pins the Android SDK packages from Google's repository XML. It is Ruby
@@ -166,12 +162,10 @@ in
     agentPluginSync
     agentPluginRelease
     claudeDesktopRelease
-    chatgptRelease
     claudeCodeRelease
     miseRelease
     preztoRelease
     piRelease
-    codexRelease
     opencodeRelease
     opencodeAuthSync
     ompAuthSync

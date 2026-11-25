@@ -124,9 +124,9 @@ with tempfile.TemporaryDirectory() as directory:
         shutil.copyfile(split / name, secrets / name)
     original = legacy.read_bytes()
     rotated = "FAKE-CANARY rotated with a newline\n  and a space "
-    run("sops", "set", "--value-stdin", secrets / services, '["openai_api_key"]',
+    run("sops", "set", "--value-stdin", secrets / services, '["anthropic_api_key"]',
         data=json.dumps(rotated).encode())
-    expected["openai_api_key"] = rotated
+    expected["anthropic_api_key"] = rotated
     assert migrate("reverse", "merged").returncode == 0, "reverse migration failed"
     assert decrypt(Path("merged/tokens.yaml")) == expected
     assert legacy.read_bytes() == original

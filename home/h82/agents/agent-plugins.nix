@@ -12,7 +12,6 @@ let
   # Single source of truth with home/h82/default.nix's package list, so each
   # command's --cli flag can never drift onto a different agent build.
   claudeCode = import ../../../packages/claude-code.nix { inherit pkgs; };
-  codex = import ../../../packages/codex.nix { inherit pkgs; };
 
   pins = import ./agent-plugin-pins.nix;
 
@@ -29,26 +28,15 @@ let
       name = "compound-engineering";
       harness = "claude";
     }
-    {
-      name = "compound-engineering";
-      harness = "codex";
-    }
   ];
 
   # The CLI each harness is driven through, and the environment it runs with.
   # Activation carries neither home.packages on PATH nor
-  # home.sessionVariables, so Claude Code's declared tier is exported around
-  # it; Codex's update overrides travel inside its wrapper.
+  # home.sessionVariables, so Claude Code's declared tier is exported around it.
   harnesses = {
     claude = {
       cli = "${claudeCode}/bin/claude";
       env = claudeEnv;
-    };
-    # T3 Code's Codex sessions run on ~/.codex, so the sync must install there
-    # even when the apply inherits a CODEX_HOME from the shell that ran it.
-    codex = {
-      cli = "${codex}/bin/codex";
-      env = "-u CODEX_HOME";
     };
   };
   knownHarnesses = lib.attrNames harnesses;

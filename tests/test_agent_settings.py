@@ -716,13 +716,9 @@ class OwnedKeyTests(unittest.TestCase):
         self.assertEqual(self.read()['foreign-status'], OWNED_EXISTING['foreign-status'])
 
 
-# Codex keeps config.toml, which it and `codex plugin add` both rewrite, and
-# the user edits by hand.  Every declared key starts at the opposite value, and
-# the comments and tables the declaration does not name are the bytes a
-# re-serializing merger would lose.
 TOML_EXISTING = '''\
 # Written by hand; keep this comment.
-model = "gpt-5.1-codex" # the user's model
+model = "test-model" # the user's model
 check_for_update_on_startup = true # turned back on by hand
 developer_instructions = "stale text from an earlier generation"
 
@@ -731,7 +727,7 @@ in_app_updates = true
 memories = true
 web_search = true # unowned sibling
 
-# Installed by codex plugin add.
+# Installed by a plugin.
 [plugins."x"]
 enabled = true
 
@@ -762,7 +758,7 @@ class TomlTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.settings = Path(self.tmp.name) / 'home/.codex/config.toml'
+        self.settings = Path(self.tmp.name) / 'home/settings/config.toml'
         self.declared = Path(self.tmp.name) / 'declared.json'
         self.declare(TOML_DECLARED)
 
@@ -782,7 +778,7 @@ class TomlTests(unittest.TestCase):
 
     def run_script(self):
         return subprocess.run(
-            [sys.executable, str(SCRIPT), '--format', 'toml', '--label', 'Codex',
+            [sys.executable, str(SCRIPT), '--format', 'toml', '--label', 'Test',
              '--settings', str(self.settings), '--declared', str(self.declared)],
             capture_output=True, text=True)
 
@@ -793,7 +789,7 @@ class TomlTests(unittest.TestCase):
         self.assertFalse(result['check_for_update_on_startup'])
         self.assertEqual(result['features'], {
             'in_app_updates': False, 'memories': False, 'daemon_auto_start': False, 'web_search': True})
-        self.assertEqual(result['model'], 'gpt-5.1-codex')
+        self.assertEqual(result['model'], 'test-model')
         text = self.settings.read_text()
         # tomlkit files a comment above a table header under the table before
         # it, so a leaf added to [features] lands after that comment.  Its
@@ -801,10 +797,10 @@ class TomlTests(unittest.TestCase):
         # adds the leaf.
         for unowned in [
             '# Written by hand; keep this comment.\n',
-            'model = "gpt-5.1-codex" # the user\'s model\n',
+            'model = "test-model" # the user\'s model\n',
             'check_for_update_on_startup = false # turned back on by hand\n',
             'web_search = true # unowned sibling\n',
-            '# Installed by codex plugin add.\n',
+            '# Installed by a plugin.\n',
             '[plugins."x"]\nenabled = true\n',
             '[marketplaces.y]\nsource = "https://example.invalid/y.git"\n',
             '[projects."/home/h82/src"]\ntrust_level = "trusted"\n',
@@ -820,7 +816,7 @@ class TomlTests(unittest.TestCase):
         self.seed('model = "unterminated\n')
         result = self.run_script()
         self.assertEqual(result.returncode, 1)
-        self.assertIn('Codex settings merge failed', result.stderr)
+        self.assertIn('Test settings merge failed', result.stderr)
         self.assertIn(str(self.settings), result.stderr)
         self.assertNotIn('Traceback', result.stderr)
         self.assertEqual(self.settings.read_text(), 'model = "unterminated\n')
@@ -894,9 +890,9 @@ class TomlTests(unittest.TestCase):
         self.merge()
         result = self.read()
         self.assertEqual(result['instructions_text'], text)
-        self.assertEqual(result['model'], 'gpt-5.1-codex')
+        self.assertEqual(result['model'], 'test-model')
         self.assertEqual(result['features']['web_search'], True)
-        self.assertIn('model = "gpt-5.1-codex" # the user\'s model\n', self.settings.read_text())
+        self.assertIn('model = "test-model" # the user\'s model\n', self.settings.read_text())
 
     def test_upsert_appends_to_an_inline_list_of_tables(self):
         self.seed('env = [{ name = "FOO", value = "1" }]\n')
@@ -918,7 +914,7 @@ class TomlTests(unittest.TestCase):
     def test_process_rejects_an_unknown_format(self):
         self.seed()
         result = subprocess.run(
-            [sys.executable, str(SCRIPT), '--format', 'yaml', '--label', 'Codex',
+            [sys.executable, str(SCRIPT), '--format', 'yaml', '--label', 'Example',
              '--settings', str(self.settings), '--declared', str(self.declared)],
             capture_output=True, text=True)
         self.assertEqual(result.returncode, 2, result.stderr)
@@ -935,7 +931,7 @@ UPSERT_EXISTING = {
             'config': {'launchArgs': '--keep'},
             'environment': [{'name': 'FOO', 'value': '1'}],
         },
-        'codex': {'driver': 'codex', 'environment': [{'name': 'X', 'value': 'y'}]},
+        'example': {'driver': 'example', 'environment': [{'name': 'X', 'value': 'y'}]},
     },
     'other': 1,
 }
@@ -1008,7 +1004,7 @@ class UpsertPathTests(unittest.TestCase):
         self.merge()
         result = self.read()
         self.assertEqual(result['providerInstances']['claudeAgent']['config'], {'launchArgs': '--keep'})
-        self.assertEqual(result['providerInstances']['codex'], UPSERT_EXISTING['providerInstances']['codex'])
+        self.assertEqual(result['providerInstances']['example'], UPSERT_EXISTING['providerInstances']['example'])
         self.assertEqual(result['other'], 1)
 
     def test_setpaths_still_refuses_a_non_scalar_value(self):
@@ -1111,7 +1107,7 @@ class UpsertPathTests(unittest.TestCase):
 
 
 MIGRATE = {'from': 'providers', 'to': 'providerInstances',
-           'kinds': ['antigravity', 'claudeAgent', 'codex']}
+           'kinds': ['antigravity', 'claudeAgent', 'example']}
 
 
 class MigrateInstanceTests(unittest.TestCase):
@@ -1158,12 +1154,12 @@ class MigrateInstanceTests(unittest.TestCase):
 
     def test_kinds_not_listed_stay_for_t3_code_to_migrate(self):
         self.seed({'providers': {'cursor': {'enabled': True, 'binaryPath': '/c'},
-                                 'codex': {'binaryPath': '/x'}}})
+                                 'example': {'binaryPath': '/x'}}})
         self.merge()
         result = self.read()
         self.assertEqual(result['providers'], {'cursor': {'enabled': True, 'binaryPath': '/c'}})
-        self.assertEqual(result['providerInstances']['codex'],
-                         {'driver': 'codex', 'config': {'binaryPath': '/x'}})
+        self.assertEqual(result['providerInstances']['example'],
+                         {'driver': 'example', 'config': {'binaryPath': '/x'}})
 
     def test_an_existing_instance_wins_and_the_legacy_block_goes(self):
         instance = {'driver': 'claudeAgent', 'config': {'launchArgs': '--add-dir x', 'binaryPath': '/new'}}
@@ -1174,9 +1170,9 @@ class MigrateInstanceTests(unittest.TestCase):
             'claudeAgent': instance, 'antigravity': {'enabled': True}}})
 
     def test_an_empty_legacy_block_makes_no_instance(self):
-        self.seed({'providers': {'codex': {}}})
+        self.seed({'providers': {'example': {}}})
         self.merge()
-        self.assertNotIn('codex', self.read()['providerInstances'])
+        self.assertNotIn('example', self.read()['providerInstances'])
         self.assertNotIn('providers', self.read())
 
     def test_second_run_does_not_rewrite_the_file(self):
@@ -1194,7 +1190,7 @@ class MigrateInstanceTests(unittest.TestCase):
 
     def test_refuses_malformed_declarations(self):
         for migration in ({'from': 'providers', 'to': 'providerInstances'},
-                          dict(MIGRATE, kinds='codex'),
+                          dict(MIGRATE, kinds='example'),
                           dict(MIGRATE, to='providers'),
                           dict(MIGRATE, extra=1)):
             with self.subTest(migration=migration):

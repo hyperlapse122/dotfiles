@@ -117,34 +117,6 @@ jobs:
         continue-on-error: true
         working-directory: ${{ runner.temp }}/updates/catalogs
         timeout-minutes: 10
-      - name: Refresh the OpenAI model list
-        shell: bash
-        run: |
-          set -euo pipefail
-          snapshot=home/h82/agents/openai-models.json
-          if [ -z "${OPENAI_API_KEY:-}" ]; then
-            echo '::warning::OPENAI_API_KEY is not set; keeping the current OpenAI model list.'
-            exit 1
-          fi
-          if ! nix run .#provider-models-watch -- --provider openai --snapshot "$snapshot"; then
-            git restore -- "$snapshot"
-            echo '::warning::OpenAI model list refresh failed; keeping the committed snapshot.'
-            exit 1
-          fi
-          if [ -n "$(git status --porcelain -- "$snapshot")" ]; then
-            git add -- "$snapshot"
-            git commit -m 'chore(agents): refresh the openai model list' -- "$snapshot"
-            echo 'changed=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'changed=false' >> "$GITHUB_OUTPUT"
-          fi
-        id: openai_models
-        if: "!cancelled() && steps.prepare_catalogs.outcome == 'success'"
-        continue-on-error: true
-        working-directory: ${{ runner.temp }}/updates/catalogs
-        timeout-minutes: 5
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       - name: Refresh the Anthropic model list
         shell: bash
         run: |
@@ -179,7 +151,7 @@ jobs:
           set -euo pipefail
           bash "$GITHUB_WORKSPACE/scripts/ci-update-publish" catalogs "$RUNNER_TEMP/updates/catalogs-logs"
         id: publish_catalogs
-        if: "!cancelled() && (steps.catalog.outputs.changed == 'true' || steps.go_catalog.outputs.changed == 'true' || steps.openai_models.outputs.changed == 'true' || steps.anthropic_models.outputs.changed == 'true')"
+        if: "!cancelled() && (steps.catalog.outputs.changed == 'true' || steps.go_catalog.outputs.changed == 'true' || steps.anthropic_models.outputs.changed == 'true')"
         continue-on-error: true
         working-directory: ${{ runner.temp }}/updates/catalogs
         timeout-minutes: 40
@@ -279,14 +251,7 @@ jobs:
           # 6. Update mise
           nix run .#mise-release -- --output packages/mise-release.json
 
-          # 7. Update ChatGPT. A feed failure or changed release identity keeps
-          # the current pin and lets the other updates through.
-          if ! nix run .#chatgpt-release -- --output packages/chatgpt-version.json; then
-            echo "::warning title=ChatGPT update skipped::chatgpt-release failed; keeping the current pin in packages/chatgpt-version.json."
-            git checkout -- packages/chatgpt-version.json
-          fi
-
-          # 8. Update T3 Code. A release can be published before its assets
+          # 7. Update T3 Code. A release can be published before its assets
           # and digests are, so a failure here keeps the current pin and lets
           # the other updates through, with the updater's message in the warning.
           t3code_status=0
@@ -311,10 +276,7 @@ jobs:
             git checkout -- packages/acpx-release.json packages/acpx/package-lock.json
           fi
 
-          # 11. Update Codex
-          update_harness_release codex Codex packages/codex-release.json
-
-          # 12. Update OpenCode. A release can be listed before its archives
+          # 11. Update OpenCode. A release can be listed before its archives
           # and digests are, so a failure keeps the current pin and lets the
           # other updates through.
           if ! nix run .#opencode-release -- --output packages/opencode-release.json; then
@@ -363,14 +325,12 @@ jobs:
 
           commit_if_pin_changed claude-desktop packages/claude-desktop-version.json
           commit_if_pin_changed claude-code packages/claude-code-manifest.json
-          commit_if_pin_changed codex packages/codex-release.json
           commit_if_pin_changed pi packages/pi-release.json
           if [ -n "$(git status --porcelain -- packages/acpx-release.json packages/acpx/package-lock.json)" ]; then
             commit_version acpx packages/acpx-release.json packages/acpx/package-lock.json
           fi
           commit_if_pin_changed t3code packages/t3code-release.json
           commit_if_pin_changed opencode packages/opencode-release.json
-          commit_if_pin_changed chatgpt packages/chatgpt-version.json
           commit_if_pin_changed ant packages/ant-release.json
           commit_if_pin_changed mise packages/mise-release.json
           commit_if_pin_changed omp packages/omp-release.json flake.nix flake.lock
@@ -517,11 +477,10 @@ jobs:
             echo '## Maintenance results'
             printf 'Catalog refresh: %s; changed: %s; publication: %s\n' "$CATALOG" "$CATALOG_CHANGED" "$CATALOG_PUSH"
             printf 'OpenCode Go catalog refresh: %s; changed: %s\n' "$GO_CATALOG" "$GO_CATALOG_CHANGED"
-            printf 'OpenAI model list refresh: %s; changed: %s\n' "$OPENAI_MODELS" "$OPENAI_MODELS_CHANGED"
             printf 'Anthropic model list refresh: %s; changed: %s\n' "$ANTHROPIC_MODELS" "$ANTHROPIC_MODELS_CHANGED"
             printf 'Dependencies: %s; changed: %s; publication: %s; reconciliation: %s\n' "$DEPENDENCIES" "$DEPENDENCIES_CHANGED" "$DEPENDENCIES_PUSH" "$RECONCILE"
           } >> "$GITHUB_STEP_SUMMARY"
-          for outcome in "$PREPARE_CATALOGS" "$PREPARE_DEPENDENCIES" "$CATALOG" "$GO_CATALOG" "$OPENAI_MODELS" "$ANTHROPIC_MODELS" "$CATALOG_PUSH" "$DEPENDENCIES" "$COMMIT" "$DEPENDENCIES_PUSH" "$RECONCILE" "$CLEANUP"; do
+          for outcome in "$PREPARE_CATALOGS" "$PREPARE_DEPENDENCIES" "$CATALOG" "$GO_CATALOG" "$ANTHROPIC_MODELS" "$CATALOG_PUSH" "$DEPENDENCIES" "$COMMIT" "$DEPENDENCIES_PUSH" "$RECONCILE" "$CLEANUP"; do
             if [ "$outcome" = failure ] || [ "$outcome" = cancelled ]; then
               exit 1
             fi
@@ -534,8 +493,6 @@ jobs:
           CATALOG_CHANGED: ${{ steps.catalog.outputs.changed }}
           GO_CATALOG: ${{ steps.go_catalog.outcome }}
           GO_CATALOG_CHANGED: ${{ steps.go_catalog.outputs.changed }}
-          OPENAI_MODELS: ${{ steps.openai_models.outcome }}
-          OPENAI_MODELS_CHANGED: ${{ steps.openai_models.outputs.changed }}
           ANTHROPIC_MODELS: ${{ steps.anthropic_models.outcome }}
           ANTHROPIC_MODELS_CHANGED: ${{ steps.anthropic_models.outputs.changed }}
           CATALOG_PUSH: ${{ steps.publish_catalogs.outcome }}

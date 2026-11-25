@@ -1,4 +1,4 @@
-"""Probe the packaged Pi runtime's model list against the declared OpenAI and Anthropic lists, offline."""
+"""Probe the packaged Pi runtime's model list against the declared Anthropic list, offline."""
 import json
 import os
 from pathlib import Path
@@ -9,7 +9,7 @@ import tempfile
 import time
 
 pi, installed, agents, kind, profile = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4], sys.argv[5]
-PROVIDERS = {'openai': 'openai-responses', 'anthropic': 'anthropic-messages'}
+PROVIDERS = {'anthropic': 'anthropic-messages'}
 
 
 def available(directory, models_json):
@@ -86,12 +86,6 @@ with tempfile.TemporaryDirectory() as directory:
         for row in declared:
             model = offered[provider, row['id']]
             assert model['contextWindow'] > 0 and model['maxTokens'] > 0, model
-        if provider == 'openai':
-            source = {row['id']: row for row in snapshots[provider]}
-            for row in declared:
-                original = source[row['id']]
-                assert row['contextWindow'] == min(original['contextWindow'], 272000), row
-                assert row['maxTokens'] == original['maxTokens'], row
 
     # Every listed model is offered once: the declared ones from models.json, the rest from the catalog.
     for provider in PROVIDERS:

@@ -4,8 +4,7 @@
 Creates a version-keyed symlink to the pinned source, drives the agent's own
 plugin commands against that path, and removes superseded versions only after
 the registration is observed pointing at the current one. --harness picks the
-agent (claude or codex); each has its own adapter for commands, listings and
-manifest paths.
+agent (claude), whose adapter supplies commands, listings and manifest paths.
 
 With --retire it does the reverse for a plugin the repository no longer
 declares: unregister it and delete its version-keyed base directory.
@@ -219,70 +218,8 @@ class Claude(Harness):
         self.add_marketplace(previous, False)
 
 
-class Codex(Harness):
-    marketplace_manifest = '.agents/plugins/marketplace.json'
-    plugin_manifest = '.codex-plugin/plugin.json'
-    plugin_key = 'pluginId'
-
-    @staticmethod
-    def recorded_source(entry):
-        source = entry.get('marketplaceSource')
-        if not entry.get('root') and isinstance(source, dict):
-            return str(source.get('source') or '')
-        return str(entry.get('root') or '')
-
-    def entries(self, parsed, what, key):
-        # Codex wraps each listing in an object, keyed by what it lists. The JSON
-        # shapes are not a stable contract. Reading an unexpected one as empty
-        # would re-add the plugin on every run, so it stops the run instead.
-        value = parsed.get(key) if isinstance(parsed, dict) else None
-        if not isinstance(value, list):
-            raise Failure('{} returned an unexpected shape; expected an object with a '
-                          '{!r} list'.format(what, key))
-        return value
-
-    def add_marketplace(self, path, dry_run):
-        require([self.cli, 'plugin', 'marketplace', 'add', path, '--json'], dry_run,
-                'marketplace add')
-
-    def add_plugin(self, plugin_id, dry_run):
-        require([self.cli, 'plugin', 'add', plugin_id, '--json'], dry_run, 'plugin add')
-
-    def remove_plugin(self, plugin_id, dry_run):
-        require([self.cli, 'plugin', 'remove', plugin_id, '--json'], dry_run, 'plugin remove')
-
-    def unregister(self, marketplace, plugin_id, dry_run):
-        if find(installed(self), plugin_id, key=self.plugin_key) is not None:
-            self.remove_plugin(plugin_id, dry_run)
-        self.remove_marketplace(marketplace, dry_run)
-
-    def ensure_plugin(self, plugin_id, dry_run):
-        # Codex has no install, update or enable. Adding only a missing plugin
-        # keeps a converged run from changing anything, and still brings back a
-        # plugin removed by hand between rebuilds.
-        if dry_run or find(installed(self), plugin_id, key=self.plugin_key) is None:
-            self.add_plugin(plugin_id, dry_run)
-
-    def restore(self, previous, plugin_id, marketplace):
-        # A plugin still installed came from the new version, so it is removed
-        # and added again from the previous marketplace. Codex refuses to add
-        # a name already registered from another source, so a half-registered
-        # new marketplace is removed first; one still at the previous source
-        # is kept.
-        if find(installed(self), plugin_id, key=self.plugin_key) is not None:
-            self.remove_plugin(plugin_id, False)
-        entry = find(registrations(self, False), marketplace)
-        if entry is not None and self.recorded_source(entry) != previous:
-            self.remove_marketplace(marketplace, False)
-            entry = None
-        if entry is None:
-            self.add_marketplace(previous, False)
-        self.add_plugin(plugin_id, False)
-
-
 HARNESSES = {
     'claude': Claude,
-    'codex': Codex,
 }
 
 
@@ -298,8 +235,7 @@ def resolves_to(harness, entry, segment, destination):
 
     An agent that names only its own cache location reports nothing to compare,
     which is not evidence either way -- callers decide what to do with False.
-    Codex resolves the version-keyed link and records its target, so the
-    link's current target counts as this version too.
+    An agent that records the link's target counts as this version too.
     """
     recorded = harness.recorded_source(entry)
     if not recorded:

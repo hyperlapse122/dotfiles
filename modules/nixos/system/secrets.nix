@@ -23,7 +23,6 @@ let
   opencodeCredentials =
     lib.optional cfg.enableSyntheticApiKey "synthetic=/run/secrets/cli-auth/synthetic_api_key"
     ++ lib.optional cfg.enableOpencodeGoApiKey "opencode-go=/run/secrets/cli-auth/opencode_go_api_key"
-    ++ lib.optional cfg.enableOpenaiApiKey "openai=/run/secrets/cli-auth/openai_api_key"
     ++ lib.optional cfg.enableAnthropicApiKey "anthropic=/run/secrets/cli-auth/anthropic_api_key";
   # Runs a credential importer as the user, handing it each published key file.
   userCredentialSync =
@@ -52,7 +51,6 @@ let
   ompCredentials =
     lib.optional cfg.enableSyntheticApiKey "synthetic=/run/secrets/cli-auth/synthetic_api_key"
     ++ lib.optional cfg.enableOpenRouterApiKey "openrouter=/run/secrets/cli-auth/openrouter_api_key"
-    ++ lib.optional cfg.enableOpenaiApiKey "openai=/run/secrets/cli-auth/openai_api_key"
     ++ lib.optional cfg.enableAnthropicApiKey "anthropic=/run/secrets/cli-auth/anthropic_api_key"
     ++ lib.optional cfg.enableOpencodeGoApiKey "opencode-go=/run/secrets/cli-auth/opencode_go_api_key"
     ++ lib.optional cfg.enableExaApiKey "exa=/run/secrets/cli-auth/exa_api_key";
@@ -148,7 +146,6 @@ in
       default = false;
       description = "Decrypt opencode_go_api_key for OpenCode's OpenCode Go provider, which activation imports into OpenCode's credential store.";
     };
-    enableOpenaiApiKey = lib.mkEnableOption "decryption of the OpenAI API key for OpenCode";
     enableAnthropicApiKey = lib.mkEnableOption "decryption of the Anthropic API key for OpenCode";
     ompPackage = lib.mkOption {
       type = lib.types.nullOr lib.types.package;

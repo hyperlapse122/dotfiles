@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory() as directory:
     agent = home / '.pi/agent'
     agent.mkdir(parents=True)
     keys.mkdir()
-    for name, value in [('synthetic', 'FAKE-synthetic'), ('openai', 'FAKE-openai'), ('anthropic', 'FAKE-anthropic')]:
+    for name, value in [('synthetic', 'FAKE-synthetic'), ('anthropic', 'FAKE-anthropic')]:
         (keys / f'{name}_api_key').write_text(value + '\n')
     (agent / 'auth.json').write_text(json.dumps({'other': {'type': 'api_key', 'key': 'FAKE-other'}}))
 
@@ -43,15 +43,11 @@ with tempfile.TemporaryDirectory() as directory:
     assert auth == {
         'other': {'type': 'api_key', 'key': 'FAKE-other'},
         'synthetic': {'type': 'api_key', 'key': 'FAKE-synthetic'},
-        'openai': {'type': 'api_key', 'key': 'FAKE-openai'},
         'anthropic': {'type': 'api_key', 'key': 'FAKE-anthropic'},
     }, auth
     assert (agent / 'auth.json').stat().st_mode & 0o777 == 0o600
 
-    # A host that publishes no OpenAI key keeps its other credentials in place.
-    (keys / 'openai_api_key').unlink()
     (keys / 'anthropic_api_key').write_text('FAKE-anthropic-rotated\n')
     assert run().returncode == 0
     auth = json.loads((agent / 'auth.json').read_text())
-    assert auth['openai'] == {'type': 'api_key', 'key': 'FAKE-openai'}
     assert auth['anthropic'] == {'type': 'api_key', 'key': 'FAKE-anthropic-rotated'}

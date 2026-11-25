@@ -1,4 +1,4 @@
-# Checks the pinned reference trees, licenses, domain entries, and their materialization in all four harness roots.
+# Checks the pinned reference trees, licenses, domain entries, and their materialization in the three harness roots.
 {
   pkgs,
   self,
@@ -138,7 +138,6 @@ let
 
   roots = [
     ".claude/skills"
-    ".codex/skills"
     ".pi/agent/skills"
     ".config/opencode/skills"
   ];

@@ -46,7 +46,7 @@ with tempfile.TemporaryDirectory() as directory:
     recorder.write_text('#!' + sys.executable + '\n' + '''import json, os, subprocess, sys
 args = sys.argv[1:]
 with open(os.environ['ACTIVATION_LOG'], 'a') as stream:
-    stream.write(json.dumps({'args': args, 'codex_home': os.environ.get('CODEX_HOME'),
+    stream.write(json.dumps({'args': args,
                              'updater': os.environ.get('DISABLE_AUTOUPDATER')}) + '\\n')
 if os.environ.get('FAIL_HARNESS') == ('settings' if '--harness' not in args else args[args.index('--harness') + 1]):
     sys.exit(73)
@@ -58,8 +58,7 @@ if os.environ['ACTIVATION_MODE'] == 'settings':
     block = root / 'block.sh'
     block.write_text('run() { if [[ -z ${DRY_RUN:-} ]]; then "$@"; fi; }\n' + redirected)
     env = dict(os.environ, HOME=str(home), ACTIVATION_LOG=str(log),
-               ACTIVATION_HELPER=helper, ACTIVATION_MODE=mode,
-               CODEX_HOME=str(root / 'inherited-codex'))
+               ACTIVATION_HELPER=helper, ACTIVATION_MODE=mode)
     env.pop('DRY_RUN', None)
 
     def run(fail=None, dry=False):
@@ -175,8 +174,6 @@ if os.environ['ACTIVATION_MODE'] == 'settings':
                 value = value.replace(original_home, str(home))
                 assert args[args.index('--' + flag) + 1] == value, 'wrong runtime plugin ' + flag
             assert '--accept-command' not in args
-            if expected['harness'] == 'codex':
-                assert call['codex_home'] is None, 'Codex inherited CODEX_HOME'
             if expected['harness'] == 'claude':
                 assert call['updater'] == '1', 'Claude updater environment missing'
         for row in contract:

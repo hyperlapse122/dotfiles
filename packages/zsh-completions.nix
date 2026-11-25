@@ -15,9 +15,6 @@ pkgs.runCommand "personal-zsh-completions"
   ''
       export HOME=$TMPDIR/home
     mkdir -p "$HOME" $out/share/zsh/site-functions
-      ${
-        import ./codex.nix { inherit pkgs; }
-      }/bin/codex completion zsh > $out/share/zsh/site-functions/_codex
       ${pkgs.gh}/bin/gh completion -s zsh > $out/share/zsh/site-functions/_gh
       ${pkgs.glab}/bin/glab completion -s zsh > $out/share/zsh/site-functions/_glab
       cp ${pkgs.ghq}/share/zsh/site-functions/_ghq $out/share/zsh/site-functions/_ghq
@@ -43,7 +40,7 @@ pkgs.runCommand "personal-zsh-completions"
       fpath=("$1" $fpath)
       autoload -Uz compinit
       compinit -D
-      for completionCommand in codex gh glab ghq mise omp usage; do
+      for completionCommand in gh glab ghq mise omp usage; do
         [[ ''${_comps[$completionCommand]-} == _$completionCommand ]] || exit 1
       done
     ' zsh "$out/share/zsh/site-functions"

@@ -1,6 +1,6 @@
 # Agent routing
 
-The ordinary user instruction files share scope and verification, language, and action triggers for the installed task guide. Delegation uses the role, model, and reasoning effort selected by CE or the harness unless the user specifies them. Claude Code, Codex, Pi, and OpenCode each receive their own render; OpenCode's is the shared base render with no branch of its own.
+The ordinary user instruction files share scope and verification, language, and action triggers for the installed task guide. Delegation uses the role, model, and reasoning effort selected by CE or the harness unless the user specifies them. Claude Code, Pi, and OpenCode each receive their own render; OpenCode's is the shared base render with no branch of its own.
 
 During CI triage, the agent reads the first relevant failure, chooses the next read-only check from that evidence, and verifies its conclusions against logs, code, or configuration. [CI triage guide](../home/h82/agents/instructions/task-guide.md#ci-triage)
 
@@ -12,9 +12,7 @@ Shared Home Manager configuration installs [acpx](../packages/acpx.nix) on both 
 
 ## Native edit and commit guards
 
-Home Manager configures the `preShell` and `freezeTests` guards for Claude Code, Codex, Pi, and OpenCode. The first catches common attempts to skip Git commit hooks. To protect test files from native edits, create `.agents/freeze-tests` at the Git root. Protection covers test and spec directories, conventional test filenames, and both paths of a rename. Set `my.agentHooks.<harness>.enable` to false to disable both guards, or configure them individually.
-
-Review changed Codex hook commands with `/hooks` in the CLI using the same Codex home as T3. A rebuild that changes the command's Nix store path requires review again. Empty positions can remain in Codex settings to preserve the identities of unrelated hooks.
+Home Manager configures the `preShell` and `freezeTests` guards for Claude Code, Pi, and OpenCode. The first catches common attempts to skip Git commit hooks. To protect test files from native edits, create `.agents/freeze-tests` at the Git root. Protection covers test and spec directories, conventional test filenames, and both paths of a rename. Set `my.agentHooks.<harness>.enable` to false to disable both guards, or configure them individually.
 
 ## Checking shared skill discovery
 
@@ -23,7 +21,6 @@ On Linux, fresh homes with the same harness binaries listed all 17 shared entrie
 | Harness | How to read the session's skill list |
 | --- | --- |
 | Claude Code 2.1.330 | Inspect the stream-JSON initialization response with user settings enabled. Bare mode skips user skills. |
-| Codex 0.171.0 | Call `skills/list` on the app server. |
 | Pi 1.6.0 | Inspect the skill commands returned by the offline RPC `get_commands` request. |
 | OpenCode 2.3.2 | Start a loopback server with temporary local authentication. Read `/api/skill` for the working directory, passing `location[directory]`. Use a bounded wait for the expected entries. The API can return HTTP 200 with only built-in entries while it is still loading directory skills. |
 
@@ -39,14 +36,13 @@ Disposable Git projects on macOS and NixOS confirmed the following with syntheti
 
 | Harness | Project discovery |
 | --- | --- |
-| Codex 0.171.0 | Found both from a nested directory in a trusted checkout. |
 | Pi 1.5.2 | Found both from a nested directory with `--approve`. With `--no-approve`, Pi skipped them. |
 | OpenCode 2.3.2 | Found both from a nested directory. |
 | Claude Code 2.1.329 | Found both through `.claude/skills/` directory links at the project root. |
 
 ## CE review peers
 
-The shared `CROSS_MODEL_PEERS` list includes `claude`, `codex`, and `opencode` where those harnesses are installed. CE uses this list when selecting a peer for cross-model review.
+The shared `CROSS_MODEL_PEERS` list includes `claude` and `opencode` where those harnesses are installed. CE uses this list when selecting a peer for cross-model review.
 
 ## T3 task guidance
 
@@ -58,9 +54,9 @@ The authoritative [T3 guide](../home/h82/agents/instructions/t3-guide.md) covers
 
 T3 Code uses Claude Code `claude-haiku-5-5` at its native effort as its shared text generation model. It asks for Conventional Commit-style titles when generating or regenerating a thread title. Commit messages, PR text, branch names, and voice transcript cleanup use the shared model unless their settings select another one. Review guides follow the source control writer selection when one is set and otherwise use the shared model, so no review guide selection is declared and activation removes a stored one. This selection does not turn on review guides.
 
-Claude, Codex, Pi, and OpenCode share their normal homes, credentials, plugins, and baseline instruction files with CLI sessions. Activation renders only the template's T3 branch into private files under `~/.t3/userdata/instructions/`. The launch composer passes Claude `--append-system-prompt-file`, Codex `-c developer_instructions=...`, and Pi `--append-system-prompt`. OpenCode has no such option, and a global `instructions` entry would reach sessions outside T3 Code, so the OpenCode instance lists its file in `OPENCODE_CONFIG_CONTENT` in its environment, which T3 Code hands to the server it starts. OpenCode reads the baseline from `~/.config/opencode/AGENTS.md`. Existing append options and Codex developer instructions are composed with the addition. Claude append-file paths must be absolute. Reapply after changing those files or native Codex developer instructions; their contents are captured during application. The private `dotfiles-launch-state.json` tracks contributions so repeated application preserves unrelated argument and environment edits. CLI launches receive the baseline only.
+Claude, Pi, and OpenCode share their normal homes, credentials, plugins, and baseline instruction files with CLI sessions. Activation renders only the template's T3 branch into private files under `~/.t3/userdata/instructions/`. The launch composer passes Claude `--append-system-prompt-file` and Pi `--append-system-prompt`. OpenCode has no such option, and a global `instructions` entry would reach sessions outside T3 Code, so the OpenCode instance lists its file in `OPENCODE_CONFIG_CONTENT` in its environment, which T3 Code hands to the server it starts. OpenCode reads the baseline from `~/.config/opencode/AGENTS.md`. Existing append options are composed with the addition. Claude append-file paths must be absolute. Reapply after changing those files; their contents are captured during application. The private `dotfiles-launch-state.json` tracks contributions so repeated application preserves unrelated argument and environment edits. CLI launches receive the baseline only.
 
-Claude uses idle compaction before the cache expires. The T3 provider uses Claude's default subagent depth unless its environment includes a user-specified value. The standalone CLI retains its configured cap. Activation retires dotfiles' old Claude and existing-mode Codex launch controls using their recorded contributions. Pi uses the managed package in the shared user profile and hides its `default` model while preserving the user's other hidden choices.
+Claude uses idle compaction before the cache expires. The T3 provider uses Claude's default subagent depth unless its environment includes a user-specified value. The standalone CLI retains its configured cap. Activation retires dotfiles' old Claude launch controls using their recorded contributions. Pi uses the managed package in the shared user profile and hides its `default` model while preserving the user's other hidden choices.
 
 Activation removes the retired Grok Build launch configuration and disables the default Grok instance. T3 Code 0.1.9 can otherwise restore the instance from session history.
 
@@ -72,7 +68,7 @@ Close T3 before applying and relaunch it afterward. Repository checks execute th
 
 ## Pi tools and project trust
 
-The Pi package builds pinned upstream source with no repository patch. Its fixed-hash source fetch lets Nix read package metadata and dependency locks without building a derivation during evaluation. `models.json` declares the committed Synthetic catalog and, for OpenAI and Anthropic, the models of the committed lists (`home/h82/agents/openai-models.json` and `home/h82/agents/anthropic-models.json`) that Pi's compiled catalog lacks, computed at build time from the catalog the Pi build pins and checked against the packaged runtime by the Pi runtime test, because a declared row replaces a catalog model and drops its compat, thinking-level, and cache settings. `pi-state` sets `enabledModels` to the visible Synthetic models and every listed OpenAI and Anthropic model, so startup selection and cycling follow the lists while `/model` still shows Pi's whole catalog. `scripts/provider-models-watch` rebuilds each list every 30 minutes from the provider's list API and models.dev, keeping ids that fully match `gpt-(?:[0-9.]+)-(?:\w+)` with version 6.1 or higher (OpenAI) or `claude-(?:\w+)-(?:[0-9\-.]+)` (Anthropic). OpenCode declares the same rows under `providers.openai.models` and `providers.anthropic.models`. The lists declare models and do not enforce them: Pi refreshes its catalog from pi.dev, and a project setting, extension, or `models.json` can add providers or models or override an endpoint. Trusted extensions still execute arbitrary JavaScript as the user.
+The Pi package builds pinned upstream source with no repository patch. Its fixed-hash source fetch lets Nix read package metadata and dependency locks without building a derivation during evaluation. `models.json` declares the committed Synthetic catalog and, for Anthropic, the models of the committed list (`home/h82/agents/anthropic-models.json`) that Pi's compiled catalog lacks, computed at build time from the catalog the Pi build pins and checked against the packaged runtime by the Pi runtime test, because a declared row replaces a catalog model and drops its compat, thinking-level, and cache settings. `pi-state` sets `enabledModels` to the visible Synthetic models and every listed Anthropic model, so startup selection and cycling follow the lists while `/model` still shows Pi's whole catalog. `scripts/provider-models-watch` rebuilds the Anthropic list every 30 minutes from the provider's list API and models.dev, keeping ids that fully match `claude-(?:\w+)-(?:[0-9\-.]+)`. OpenCode declares the same rows under `providers.anthropic.models`. The lists declare models and do not enforce them: Pi refreshes its catalog from pi.dev, and a project setting, extension, or `models.json` can add providers or models or override an endpoint. Trusted extensions still execute arbitrary JavaScript as the user.
 
 The shared `~/.pi/agent/` contains the repository-owned `question`, `web_search`, and `web_fetch` extensions. Questions use native select and input dialogs, with distinct cancellation, empty-answer, and unavailable-UI results. Web tools use Exa and return bounded source content with URLs for citations. Page content is untrusted input.
 

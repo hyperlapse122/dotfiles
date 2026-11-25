@@ -62,15 +62,15 @@ try:
         endpoint = f'http://127.0.0.1:{server.server_port}'
         cloud_endpoint = f'http://127.0.0.1:{cloud.server_port}'
         local['baseUrl'] = endpoint + '/local/v1'
-        for provider in ('synthetic', 'openai', 'anthropic'):
+        for provider in ('synthetic', 'anthropic'):
             models['providers'].setdefault(provider, {})['baseUrl'] = cloud_endpoint + '/cloud/' + provider
         (agent / 'models.json').write_text(json.dumps(models))
-        auth = {provider: {'type': 'api_key', 'key': 'FAKE'} for provider in ('openai', 'anthropic')}
+        auth = {'anthropic': {'type': 'api_key', 'key': 'FAKE'}}
         (agent / 'auth.json').write_text(json.dumps(auth))
         (home / 'fixture.txt').write_text('safe local fixture\n')
         executable = home / 'pi'
         contents = wrapper.read_text()
-        for name in ('synthetic', 'openai', 'anthropic', 'exa'):
+        for name in ('synthetic', 'anthropic', 'exa'):
             contents = contents.replace(f'{key_directory}/{name}_api_key', str(home / (name + '-missing')))
         executable.write_text(contents)
         executable.chmod(0o700)

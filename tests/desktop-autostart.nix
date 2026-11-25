@@ -43,8 +43,6 @@
     app-telegram@autostart.service is declared, because it would shadow the
     generated unit, ExecStart included.
   - Every bootstrap configuration declares none of these files.
-  - No materialized autostart file or systemd user unit launches ChatGPT on
-    any configuration.
 
   The entries are located by their resolved target rather than by attribute
   name, and their enable and force flags are read beside their text, because an
@@ -324,34 +322,6 @@ let
       ${dropInChecks}
     '';
 
-  # Read generated files so home.file entries with arbitrary attribute names
-  # and targets cannot bypass the manual-launch contract.
-  assertChatgptManualLaunch =
-    entry:
-    let
-      homeFiles = "${entry.user.home.activationPackage}/home-files";
-      trees = [
-        "${homeFiles}/${resolvedTarget entry.user "autostart"}"
-        "${homeFiles}/${resolvedTarget entry.user "systemd/user"}"
-        "${entry.user.home.path}/share/systemd/user"
-        "${entry.user.home.path}/lib/systemd/user"
-        "${entry.config.system.path}/share/systemd/user"
-        "${entry.config.system.path}/lib/systemd/user"
-        "${entry.config.system.build.etc}/etc/xdg/autostart"
-        "${entry.config.system.build.etc}/etc/systemd/user"
-      ];
-    in
-    ''
-      for startup in ${lib.escapeShellArgs (map toString trees)}; do
-        if [ -d "$startup" ]; then
-          if find -L "$startup" -type f -iname '*chatgpt*' -print | grep . >/dev/null \
-            || grep -Riq -- 'chatgpt' "$startup"; then
-            ${fail "ChatGPT login startup is unsupported but an autostart entry or user unit exists on ${entry.name}"}
-          fi
-        fi
-      done
-    '';
-
   # The swapped package is a different store path from pkgs.tailscale, so an
   # entry that hardcodes pkgs.tailscale no longer matches.
   assertSwappedTailscale =
@@ -388,7 +358,6 @@ pkgs.runCommand "desktop-autostart-tests" { nativeBuildInputs = [ pkgs.gnugrep ]
   ${tailscale.guard}
   ${lib.concatMapStringsSep "\n" assertProduction production}
   ${lib.concatMapStringsSep "\n" assertBootstrap configurations.bootstraps}
-  ${lib.concatMapStringsSep "\n" assertChatgptManualLaunch configurations.entries}
   ${assertSwappedTailscale}
 
   if [ "$failed" != 0 ]; then

@@ -27,12 +27,12 @@ let
   fakeKey = "0123456789ABCDEF0123456789ABCDEF01234567";
   deliveryPaths = [
     ".claude/CLAUDE.md"
-    ".codex/AGENTS.md"
     ".pi/agent/AGENTS.md"
     ".config/opencode/AGENTS.md"
   ];
   retiredPaths = [
     ".local/share/nix-config/claude-code-agents.json"
+    ".codex/AGENTS.md"
     ".gemini/config/rules"
     ".t3/instructions/claude-code/CLAUDE.md"
     ".grok/AGENTS.md"

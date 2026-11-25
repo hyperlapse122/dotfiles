@@ -3,7 +3,6 @@
 let
   apps = {
     "1password".cask = "1password";
-    chatgpt.cask = "chatgpt";
     claude-desktop.cask = "claude";
     discord.cask = "discord";
     firefox-developer-edition.cask = "firefox@developer-edition";

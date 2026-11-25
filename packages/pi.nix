@@ -2,7 +2,6 @@
   pkgs,
   syntheticKeyFile ? "/run/secrets/cli-auth/synthetic_api_key",
   exaKeyFile ? "/run/secrets/cli-auth/exa_api_key",
-  openaiKeyFile ? "/run/secrets/cli-auth/openai_api_key",
   anthropicKeyFile ? "/run/secrets/cli-auth/anthropic_api_key",
 }:
 
@@ -23,8 +22,6 @@ assert lib.assertMsg (plainPath syntheticKeyFile)
   "pi: syntheticKeyFile '${syntheticKeyFile}' is not a plain absolute path";
 assert lib.assertMsg (plainPath exaKeyFile)
   "pi: exaKeyFile '${exaKeyFile}' is not a plain absolute path";
-assert lib.assertMsg (plainPath openaiKeyFile)
-  "pi: openaiKeyFile '${openaiKeyFile}' is not a plain absolute path";
 assert lib.assertMsg (plainPath anthropicKeyFile)
   "pi: anthropicKeyFile '${anthropicKeyFile}' is not a plain absolute path";
 assert lib.assertMsg (
@@ -58,7 +55,6 @@ stdenv.mkDerivation {
       --replace-fail '@STATE@' "$out/bin/pi-state" \
       --replace-fail '@KEY@' '${syntheticKeyFile}' \
       --replace-fail '@EXA_KEY@' '${exaKeyFile}' \
-      --replace-fail '@OPENAI_KEY@' '${openaiKeyFile}' \
       --replace-fail '@ANTHROPIC_KEY@' '${anthropicKeyFile}'
     runHook postInstall
   '';

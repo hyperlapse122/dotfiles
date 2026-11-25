@@ -126,13 +126,21 @@ let
         path = [ "providerInstances" ];
         key = "omp-codex";
       }
+      {
+        path = [ "providerInstances" ];
+        key = "codex";
+      }
+      {
+        path = [ "providers" ];
+        key = "codex";
+        prune = true;
+      }
     ];
     migrateInstances = {
       from = "providers";
       to = "providerInstances";
       kinds = [
         "claudeAgent"
-        "codex"
         "opencode"
         "pi"
       ];
@@ -150,40 +158,6 @@ let
         path = [
           "providerInstances"
           "claudeAgent"
-          "enabled"
-        ];
-        value = true;
-      }
-      {
-        path = [
-          "providerInstances"
-          "codex"
-          "config"
-          "homePath"
-        ];
-        value = "~/.codex";
-      }
-      {
-        path = [
-          "providerInstances"
-          "codex"
-          "config"
-          "setupMode"
-        ];
-        value = "existing";
-      }
-      {
-        path = [
-          "providerInstances"
-          "codex"
-          "driver"
-        ];
-        value = "codex";
-      }
-      {
-        path = [
-          "providerInstances"
-          "codex"
           "enabled"
         ];
         value = true;
@@ -386,11 +360,11 @@ let
       staleField = "remove me";
     };
     textGenerationModelSelection = {
-      instanceId = "codex";
-      model = "gpt-6-luna";
+      instanceId = "pi";
+      model = "synthetic/hf:zai-org/GLM-5.3-Flash";
       options = [
         {
-          id = "reasoningEffort";
+          id = "thinking";
           value = "high";
         }
       ];
@@ -411,16 +385,15 @@ let
       model = "claude-opus-5-5";
     };
     speechPostProcessingModelSelection = {
-      instanceId = "codex";
-      model = "gpt-6-luna";
+      instanceId = "claudeAgent";
+      model = "claude-haiku-5-5";
     };
     reviewGuidesEnabled = false;
     unrelated.keep = true;
-    providerInstances.codex.config.env.KEEP = "yes";
     projectSettingsOverrides.scratch = {
       defaultModelSelection = {
-        instanceId = "codex";
-        model = "gpt-6.1-sol";
+        instanceId = "claudeAgent";
+        model = "claude-opus-5-5";
         options = [ ];
       };
       threadTitleInstructions = "Use sentence case.";
@@ -438,6 +411,13 @@ let
       snapShotEnabled = true;
     };
     remove = [ ];
+    removePaths = [
+      {
+        path = [ "providerModelPreferences" ];
+        key = "codex";
+        prune = true;
+      }
+    ];
     setPaths = [ ];
     own = { };
   };
@@ -556,12 +536,6 @@ let
                 [ "sourceControlWriterModelSelection" ]
                 [ "speechPostProcessingModelSelection" ]
                 [ "reviewGuidesEnabled" ]
-                [
-                  "providerInstances"
-                  "codex"
-                  "config"
-                  "env"
-                ]
               ];
             };
           }}
@@ -761,12 +735,6 @@ pkgs.runCommand "t3code-traits" { nativeBuildInputs = [ pkgs.python3 ]; } ''
       return
     fi
     declared=$(sed -n 's/.*--declared \([^ ]*\).*/\1/p' script | tr -d "'\"")
-    if [ "$attr" = t3codeSettings ] && [ -n "$declared" ] \
-      && ! python3 -I ${./t3code-codex-home.py} "$declared" 2> codex-home.log; then
-      echo "$name: a declared Codex instance can run outside ~/.codex:" >&2
-      cat codex-home.log >&2
-      fail=1
-    fi
 
     [ "$attr" = t3codeSettings ] || return 0
     [ "$full" = true ] || return 0

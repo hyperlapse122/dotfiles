@@ -44,9 +44,6 @@ in
   agent-plugin-release =
     pythonScriptCheck "agent-plugin-release" ../scripts/agent-plugin-release
       ./test_agent_plugin_release.py;
-  chatgpt-release = pythonScriptCheckWith {
-    nativeBuildInputs = [ pkgs.curl ];
-  } "chatgpt-release" ../scripts/chatgpt-release ./test_chatgpt_release.py;
   claude-desktop-release =
     pythonScriptCheck "claude-desktop-release" ../scripts/claude-desktop-release
       ./test_claude_desktop_release.py;
@@ -57,7 +54,6 @@ in
   prezto-release =
     pythonScriptCheck "prezto-release" ../scripts/prezto-release
       ./test_prezto_release.py;
-  codex-release = releaseScriptCheck "codex-release" ../scripts/codex-release ./test_codex_release.py;
   opencode-release =
     releaseScriptCheck "opencode-release" ../scripts/opencode-release
       ./test_opencode_release.py;
@@ -100,7 +96,6 @@ in
     modules = [ ../scripts/catalog_snapshot.py ];
     setup = ''
       mkdir -p home/h82/agents
-      cp ${../home/h82/agents/openai-models.json} home/h82/agents/openai-models.json
       cp ${../home/h82/agents/anthropic-models.json} home/h82/agents/anthropic-models.json
     '';
   } "provider-models-watch" ../scripts/provider-models-watch ./test_provider_models_watch.py;

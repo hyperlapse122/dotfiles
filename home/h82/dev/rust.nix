@@ -53,7 +53,7 @@ in
   # `cargo install` puts binaries here; the Nix rustup does not add it itself.
   home.sessionPath = [ "${config.home.homeDirectory}/.cargo/bin" ];
 
-  # Ordered after installPackages as on codexSettings in agents/codex.nix: a
+  # Ordered after installPackages as on the agent settings merges: a
   # refusal must fail the rebuild loudly without stranding linkGeneration or
   # installPackages behind it.
   home.activation.cargoSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''

@@ -95,7 +95,6 @@ let
       boot-layout-invariants = import ./boot-layout-invariants.nix { inherit pkgs self; };
       bootstrap-recipients = import ./bootstrap-recipients.nix { inherit pkgs; };
       bootstrap-secrets = import ./bootstrap-secrets.nix { inherit pkgs self; };
-      chatgpt = import ./chatgpt.nix { inherit pkgs self; };
       check-shards-guard = import ./check-shards-guard.nix {
         inherit pkgs;
         # attrNames forces no check, so the guard never evaluates itself.
@@ -105,8 +104,6 @@ let
       claude = import ./claude.nix { inherit pkgs self; };
       claude-code = import ./claude-code.nix { inherit pkgs self; };
       claude-desktop = import ./claude-desktop.nix { inherit pkgs self; };
-      codex = import ./codex.nix { inherit pkgs self; };
-      codex-settings = import ./codex-settings.nix { inherit pkgs self; };
       desktop-packages = import ./desktop-packages.nix { inherit pkgs self; };
       firefox-developer-edition = import ./firefox-developer-edition.nix { inherit pkgs self; };
       git-cli-repo-flags = import ./git-cli-repo-flags.nix { inherit pkgs self; };

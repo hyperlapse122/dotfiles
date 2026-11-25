@@ -140,59 +140,6 @@ let
     }) (darwinFixtures ++ lib.mapAttrsToList (name: host: { inherit name host; }) darwinConfigurations);
   };
 
-  # The declared values belong to tests/codex-settings.nix; this reads them
-  # from the file the step hands the merge, so it checks only their effect.
-  codexEffects = pkgs.writeText "codex-activation-effects.py" ''
-    import json, os, re, subprocess, sys, tempfile, tomllib
-    from pathlib import Path
-    body = Path(sys.argv[1]).read_text()
-    original = sys.argv[2]
-    declared = json.loads(Path(re.search(r"--declared (\S+)", body)[1]).read_text())
-    with tempfile.TemporaryDirectory() as work:
-        home = Path(work) / "home"
-        target = home / ".codex/config.toml"
-        target.parent.mkdir(parents=True)
-        redirected = body.replace(original, str(home))
-        assert redirected != body and original not in redirected, "Codex destination was not redirected"
-        env = dict(os.environ, HOME=str(home), CODEX_HOME=str(home / ".codex"))
-        env.pop("DRY_RUN", None)
-        def run():
-            return subprocess.run(["bash", "-euo", "pipefail", "-c", redirected], env=env, capture_output=True, text=True)
-        seed = 'model = "old-model"\nmodel_reasoning_effort = "old-effort"\nservice_tier = "old-tier"\ncheck_for_update_on_startup = true\ndeveloper_instructions = "retired"\ncustom = "keep"\n[agents]\ndefault_subagent_model = "old-child"\ndefault_subagent_reasoning_effort = "old-effort"\nmax_threads = 3\n[features]\nin_app_updates = true\ndaemon_auto_start = true\nmemories = true\ncomputer_use = true\ncustom = true\n[plugins."computer-use@openai-bundled"]\nenabled = true\n[plugins."unified-computer-use@openai-bundled"]\nenabled = true\n'
-        expected = tomllib.loads(seed)
-        for key in declared["remove"]:
-            assert key in expected, f"seed lacks retired key {key}"
-            del expected[key]
-        for entry in declared["setPaths"]:
-            *parents, leaf = entry["path"]
-            table = expected
-            for part in parents:
-                table = table[part]
-            assert table.get(leaf) != entry["value"], f"seed already holds declared {entry['path']}"
-            table[leaf] = entry["value"]
-        for entry in declared.get("ownEntries", []):
-            table = expected
-            for part in entry["path"]:
-                table = table.setdefault(part, {})
-            table.update(entry["entries"])
-        target.write_text(seed)
-        result = run()
-        assert result.returncode == 0, result.stderr
-        actual = tomllib.loads(target.read_text())
-        assert actual == expected, "Codex activation did not apply declarations, retire keys, and preserve unmanaged state"
-        assert actual["check_for_update_on_startup"] is False
-        fff = actual.get("mcp_servers", {}).get("fff", {})
-        assert fff.get("command", "").startswith("/nix/store/") and fff["command"].endswith("/bin/fff-mcp"), "Codex must start the fff MCP server by its store path"
-        assert os.access(fff["command"], os.X_OK), "the fff MCP server command is not executable"
-        assert fff.get("args") == ["--no-update-check"], "the fff MCP server must run without its update check"
-        assert all(actual["features"][key] is False for key in ["in_app_updates", "daemon_auto_start", "memories"]), "Codex settings must be TOML booleans"
-        protected = b'[features\nmalformed = true\n'
-        target.write_bytes(protected)
-        result = run()
-        assert result.returncode != 0, "Codex activation swallowed malformed-input refusal"
-        assert target.read_bytes() == protected, "Codex activation altered protected malformed input"
-  '';
-
   cargoEffects = pkgs.writeText "cargo-activation-effects.py" ''
     import os, subprocess, sys, tempfile, tomllib
     from pathlib import Path
@@ -336,7 +283,7 @@ let
         subprocess.run(argv, check=True)
         PY
           done
-          grep -qx 'FAKE-CANARY openai' "$secret_home/.local/state/cli-auth/openai_api_key" \
+          grep -qx 'FAKE-CANARY anthropic' "$secret_home/.local/state/cli-auth/anthropic_api_key" \
             && test -w "$secret_home/.config/gh/hosts.yml" \
             && test -w "$secret_home/.config/glab-cli/config.yml" \
             || bad "fixture activation did not publish the provider key and writable CLI config"
@@ -355,7 +302,6 @@ let
           lib.escapeShellArgs (
             map (root: "--root ${lib.escapeShellArg "${user.home.homeDirectory}/${root}"}") [
               ".claude/skills"
-              ".codex/skills"
               ".pi/agent/skills"
               ".config/opencode/skills"
             ]
@@ -375,13 +321,6 @@ let
       fi
       [ ! -e "$gen/home-path/bin/docker" ] || bad "Podman docker wrapper reached Darwin"
 
-      if [ -d "$gen/LaunchAgents" ]; then
-        if find -L "$gen/LaunchAgents" -type f -iname '*chatgpt*' -print | grep . >/dev/null \
-          || grep -Riq -- 'chatgpt' "$gen/LaunchAgents"; then
-          bad "ChatGPT login startup is unsupported but a launch agent exists"
-        fi
-      fi
-
       # A plist with its whitespace removed, so a key and its value are adjacent.
       agent() { tr -d ' \t\n' 2>/dev/null < "$gen/LaunchAgents/org.nix-community.home.$1.plist" || true; }
       [ -z "$(agent podman-machine-podman-machine-default)" ] || bad "Podman watchdog reached Darwin"
@@ -389,7 +328,6 @@ let
       grep -Fxq 'export CROSS_MODEL_PEERS="${peers}"' "$vars" \
         || bad "the session does not set CROSS_MODEL_PEERS to ${peers}"
       grep -Fxq 'export CROSS_MODEL_MAX_PEERS="2"' "$vars" || bad "the session does not set CROSS_MODEL_MAX_PEERS to 2"
-      case ",${peers}," in *,codex,*) ;; *) bad "CROSS_MODEL_PEERS (${peers}) does not allow codex, which the profile installs" ;; esac
       peeragent=$(agent cross-model-peers)
       case $peeragent in
         *'launchctlsetenvCROSS_MODEL_PEERS${peers}/bin/launchctlsetenvCROSS_MODEL_MAX_PEERS2'*'<key>RunAtLoad</key><true/>'*) ;;
@@ -477,12 +415,6 @@ let
 
       [ "$(readlink -f "$gen/home-path/bin/acpx" || true)" = ${lib.escapeShellArg acpx} ] \
         || bad "acpx on PATH is not the packaged binary"
-
-      codexBlock=$TMPDIR/codex-settings-$variant.sh
-      stepBlock codexSettings > "$codexBlock"
-      if ! python3 ${codexEffects} "$codexBlock" ${lib.escapeShellArg config.my.user.home}; then
-        bad "Codex activation effect contract failed"
-      fi
 
       [ -x "$gen/home-path/bin/sccache" ] || bad "sccache is missing from PATH"
       cargoBlock=$TMPDIR/cargo-settings-$variant.sh
@@ -695,6 +627,8 @@ let
       flightyline=$(lineof 'if ! appStoreMas install 1358823008 && ! appStoreMas get 1358823008; then'); flightyline=''${flightyline:-0}
       retiredbrewline=$(lineof ${lib.escapeShellArg ''PATH="${config.homebrew.prefix}/bin:$PATH" /usr/bin/sudo --preserve-env=PATH --user=${config.system.primaryUser} --set-home /usr/bin/env NONINTERACTIVE=1 ${brewExe} "$@"''}); retiredbrewline=''${retiredbrewline:-0}
       retiredlistline=$(lineof ${lib.escapeShellArg ''if [ -z "$retiredList" ] || [ "$retiredList" = "Error: Cask 'grok-bot' is not installed." ]; then''}); retiredlistline=''${retiredlistline:-0}
+      retiredchatgptline=$(lineof ${lib.escapeShellArg "if ! retiredList=$(retiredBrew list --cask chatgpt 2>&1 >/dev/null); then"}); retiredchatgptline=''${retiredchatgptline:-0}
+      retiredchatgptuninstallline=$(lineof 'elif ! retiredBrew uninstall --cask --force chatgpt; then'); retiredchatgptuninstallline=''${retiredchatgptuninstallline:-0}
       retiredline=$(lineof 'elif ! retiredBrew uninstall --cask --force grok-bot; then'); retiredline=''${retiredline:-0}
       hmline=$(lineof "echo Activating home-manager configuration for "); hmline=''${hmline:-0}
       if [ "$bundleline" = 0 ] || [ "$hmline" = 0 ]; then
@@ -715,8 +649,8 @@ let
       elif ! [ "$kakaoline" -lt "$flightyline" ] || ! [ "$flightyline" -lt "$hmline" ]; then
         bad "the Flighty step does not run after the KakaoTalk step and before Home Manager"
       fi
-      if [ "$retiredbrewline" = 0 ] || [ "$retiredlistline" = 0 ] || [ "$retiredline" = 0 ]; then
-        bad "the system activation has no retired-cask step running brew through sudo for grok-bot, telling not-installed from other brew list failures, and uninstalling with --force"
+      if [ "$retiredbrewline" = 0 ] || [ "$retiredlistline" = 0 ] || [ "$retiredchatgptline" = 0 ] || [ "$retiredchatgptuninstallline" = 0 ] || [ "$retiredline" = 0 ]; then
+        bad "the system activation has no retired-cask step running brew through sudo for grok-bot and chatgpt, telling not-installed from other brew list failures, and uninstalling with --force"
       elif ! [ "$bundleline" -lt "$retiredbrewline" ] || ! [ "$flightyline" -lt "$retiredbrewline" ] || ! [ "$retiredbrewline" -lt "$retiredlistline" ] || ! [ "$retiredlistline" -lt "$retiredline" ] || ! [ "$retiredline" -lt "$hmline" ]; then
         bad "the retired-cask step does not run after brew bundle and the Flighty step and before Home Manager"
       fi

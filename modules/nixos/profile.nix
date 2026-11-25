@@ -47,7 +47,6 @@
     cliAuth.enableExaApiKey = lib.mkDefault true;
     cliAuth.enableOpenRouterApiKey = lib.mkDefault true;
     cliAuth.enableOpencodeGoApiKey = lib.mkDefault true;
-    cliAuth.enableOpenaiApiKey = lib.mkDefault true;
     cliAuth.enableAnthropicApiKey = lib.mkDefault true;
     tailscale.enable = lib.mkDefault (!config.my.bootstrap);
     # A bootstrap install runs before the host's age identity exists, so its

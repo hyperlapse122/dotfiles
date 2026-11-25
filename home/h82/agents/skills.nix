@@ -7,7 +7,6 @@
 let
   roots = [
     ".claude/skills"
-    ".codex/skills"
     ".pi/agent/skills"
     ".config/opencode/skills"
   ];
@@ -54,9 +53,9 @@ in
     ''
   ) config.my.agentSkillReferences;
 
-  # One link per root and skill, to the skill directory itself: Codex skips a
-  # SKILL.md that is a symlink, so the files inside must not be linked one by
-  # one with `recursive = true`.
+  # One link per root and skill, to the skill directory itself: a harness that
+  # skips a symlinked SKILL.md needs the files inside linked as one directory,
+  # not one by one with `recursive = true`.
   config.home.file = lib.listToAttrs (
     lib.concatMap (
       root:

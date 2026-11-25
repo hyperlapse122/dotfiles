@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Set declared keys in a coding agent's user settings file. Run as the target user.
 
-Claude Code and Codex each own their settings file and
-rewrite it whenever a setting changes at runtime, so Home Manager cannot place a read-only
+Claude Code owns its settings file and
+rewrites it whenever a setting changes at runtime, so Home Manager cannot place a read-only
 store symlink there.  Activation assigns the declared top-level keys, drops the
 ones this repository has retired, and leaves every other key exactly as the
 agent wrote it.  Tokscale does the same with a settings file whose preferences
@@ -13,7 +13,7 @@ assign scalars at explicit nested paths.
 depends on which agent owns the file: each writes a JSON object that the user
 also edits through the agent's own interface.
 
---format toml merges into a TOML file instead, such as Codex's config.toml,
+--format toml merges into a TOML file instead, such as config.toml,
 with the same semantics.  The declaration stays JSON.  The file is edited in
 place through tomlkit, so the user's comments and the tables the declaration
 does not name keep their bytes.  TOML has no null, so a declared null is
@@ -71,11 +71,9 @@ The declared document is a JSON object with these fields:
                                     every entry an earlier apply wrote that
                                     the declaration no longer names is
                                     removed; entries no apply wrote stay
-  hookGroups {identity: {statusMessage, commandPrefix, commandSuffix, disabledMatcher},
-              preserveSlots: bool, events: {event: group | {}}}
+  hookGroups {identity: {statusMessage, commandPrefix, commandSuffix},
+              events: {event: group | {}}}
                                     Reconcile managed native JSON hook groups.
-                                    Keep empty slots when the harness uses
-                                    numeric indices for trust.
   migrateInstances {from: name, to: name, kinds: [name],
                     retireAntigravity: {profileBinary, registryCommand, instructions}}
                                     T3 Code's move of a retired per-kind
@@ -234,13 +232,13 @@ def declaration(declared, fmt='json'):
     hook_groups = document.get('hookGroups')
     if hook_groups is not None:
         if (fmt != 'json' or not isinstance(hook_groups, dict)
-                or set(hook_groups) != {'identity', 'preserveSlots', 'events'}):
-            raise ValueError('declared hookGroups needs identity, preserveSlots and events in JSON settings')
-        if not isinstance(hook_groups['preserveSlots'], bool) or not isinstance(hook_groups['events'], dict):
+                or set(hook_groups) != {'identity', 'events'}):
+            raise ValueError('declared hookGroups needs identity and events in JSON settings')
+        if not isinstance(hook_groups['events'], dict):
             raise ValueError('invalid hookGroups declaration')
         identity = hook_groups['identity']
         if (not isinstance(identity, dict)
-                or set(identity) != {'statusMessage', 'commandPrefix', 'commandSuffix', 'disabledMatcher'}
+                or set(identity) != {'statusMessage', 'commandPrefix', 'commandSuffix'}
                 or not all(isinstance(value, str) and value for value in identity.values())):
             raise ValueError('invalid hookGroups identity')
         check_top_level(['hooks'], assign, retire, owned)
@@ -600,9 +598,7 @@ def reconcile_hook_groups(settings, specification):
     hooks = settings.get('hooks', {})
     if not isinstance(hooks, dict):
         raise ValueError('native hooks must be an object')
-    preserve_slots = specification['preserveSlots']
     identity = specification['identity']
-    disabled_group = {'matcher': identity['disabledMatcher'], 'hooks': []}
     for event, desired in specification['events'].items():
         groups = hooks.get(event, [])
         if not isinstance(groups, list):
@@ -612,31 +608,21 @@ def reconcile_hook_groups(settings, specification):
             if not isinstance(group, dict) or not isinstance(group.get('hooks'), list):
                 continue
             handlers = group['hooks']
-            if preserve_slots and group == disabled_group:
-                if desired:
-                    groups[index] = desired
-                    break
-                continue
             managed = [i for i, handler in enumerate(handlers) if is_managed_hook(handler, identity)]
             if not managed:
                 continue
             if len(handlers) == len(managed):
                 if desired:
                     groups[index] = desired
-                elif preserve_slots:
-                    groups[index] = copy.deepcopy(disabled_group)
                 else:
                     del groups[index]
                     if not groups:
                         del hooks[event]
                 break
             # An owner can add a handler to a managed matcher group. Keep
-            # their matcher and, for Codex, their handler index within it.
+            # their matcher and delete only the handlers this repository owns.
             for slot in reversed(managed):
-                if preserve_slots and slot < len(handlers) - 1:
-                    handlers[slot] = {'type': 'command', 'command': ':', 'statusMessage': identity['statusMessage']}
-                else:
-                    del handlers[slot]
+                del handlers[slot]
         else:
             if desired:
                 groups.append(desired)

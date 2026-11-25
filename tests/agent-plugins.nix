@@ -24,9 +24,6 @@
     is ordered so a refusal cannot strand installPackages, hands the helper the
     pinned source rather than some other path, and names the version segment
     the lock actually resolved.
-  - The Codex row runs its sync under `env -u CODEX_HOME` and the script sets
-    no CODEX_HOME, so the row installs into ~/.codex, the home T3 Code's
-    Codex sessions run on, even when the apply inherits a CODEX_HOME.
 
   The pin assertion compares two genuinely separate sources: `flake.lock`,
   which Nix writes, and the pin file in home/h82/agents/agent-plugin-pins.nix,
@@ -101,11 +98,6 @@ let
           pname = "claude-code";
           expectedCli = claudeCli;
         }
-        {
-          name = "codex";
-          pname = "codex";
-          expectedCli = packagePath "codex" "codex";
-        }
       ];
 
       activation = userConfig.home.activation.agentPlugins or null;
@@ -161,9 +153,6 @@ let
           failed=1
         fi
 
-        # Each harness's invocation is read separately: with a Claude and a
-        # Codex row for the same plugin, a block chosen by plugin name alone
-        # would check whichever came first and let the other drift.
         ${lib.concatMapStrings (harness: ''
           block=$(blockForHarness ${esc script} ${esc pluginName} ${esc harness.name})
           if [ -z "$block" ]; then
@@ -196,20 +185,6 @@ let
             failed=1
           fi
         '') harnessChecks}
-
-        # T3 Code's Codex sessions run on ~/.codex, so the Codex plugin sync
-        # must install there too. It must unset a CODEX_HOME the apply
-        # inherits, and nothing in the script may set one, as an env prefix or
-        # an export. A store path cannot spell the name, which is upper case
-        # with an underscore.
-        if ! grep -qE -- '(^|[[:space:]])env[[:space:]]+-u[[:space:]]+CODEX_HOME[[:space:]]' <<< "$(blockForHarness ${esc script} ${esc pluginName} codex)"; then
-          echo 'the agentPlugins activation script must run the Codex plugin sync under env -u CODEX_HOME on ${hostName}' >&2
-          failed=1
-        fi
-        if grep -qE -- 'CODEX_HOME=' <<< ${esc script}; then
-          echo 'the agentPlugins activation script must not set CODEX_HOME on ${hostName}' >&2
-          failed=1
-        fi
 
         # The activation unit carries no session variables, so Claude Code's
         # declared environment tier has to be exported around its CLI.

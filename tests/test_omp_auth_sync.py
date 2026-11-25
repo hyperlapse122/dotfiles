@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/omp-auth-sync"
-PROVIDERS = ("synthetic", "openrouter", "openai", "anthropic", "opencode-go", "exa")
+PROVIDERS = ("synthetic", "openrouter", "anthropic", "opencode-go", "exa")
 
 FAKE_OMP = """#!{python}
 import json, os, sys
