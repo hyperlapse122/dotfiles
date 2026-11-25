@@ -233,10 +233,6 @@ Follow these steps in order when a host is lost, compromised, or retired. Treat 
 
 `wired-network.yaml` holds no credential, so compromise or decommission rotates nothing for it; the file only reveals the shape of an internal network. A NixOS host restored from a generation that predates the wired network feature comes up on DHCP; applying the current production output restores the static address.
 
-### Historical note on the retired VM identity
-
-When this repository restored bare-metal `MS-7D91` and retired the former VMware guest host, a fresh age identity was generated for `MS-7D91` (`secrets/bootstrap/MS-7D91/{age-key.asc,recipient.txt}`), the retired guest recipient was removed from `.sops.yaml`, and `secrets/tokens.yaml`, `secrets/wifi.yaml`, `secrets/tailscale.yaml`, and `secrets/printers.yaml` were re-keyed and had their data keys rotated (`sops updatekeys` and `sops rotate -i`), while the GitHub, JPI GitLab, and Synthetic tokens were updated. However, the retired VM age identity could decrypt the pre-rotation ciphertext preserved in Git history. If a leak of that retired VM identity is ever suspected, re-keying alone does not protect unchanged values from historical commits: rotate the Wi-Fi PSKs in `secrets/wifi.yaml`, the Tailscale key in `secrets/tailscale.yaml`, the printer configuration in `secrets/printers.yaml`, and any token in `secrets/tokens.yaml` that was not already reissued at its provider.
-
 ## Replace tokens or a host age identity
 
 To rotate one CLI credential, use the [streaming rotation command](../secrets/README.md#rotate-or-add-a-cli-credential) and apply the configuration.
