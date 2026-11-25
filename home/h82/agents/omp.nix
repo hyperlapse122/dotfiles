@@ -40,6 +40,7 @@ in
       defaultThinkingLevel = "auto";
       composer.shape = "band";
       composer.tokenRate = true;
+      composer.predictionAlternatives = false;
       theme.dark = "titanium";
       theme.light = "light";
       update.auto = false;
@@ -48,6 +49,31 @@ in
       # is below its own setup version, and the declared file replaces the
       # value omp writes on each switch.
       setupVersion = 3;
+      statusLine.sessionAccent = true;
+      statusLine.transparent = false;
+      terminal.showProgress = false;
+      tui.textSizing = true;
+      tui.hyperlinks = "auto";
+      tui.tight = false;
+      tui.imeSafeCursor = true;
+      display.shimmer = "kitt";
+      display.subagentLivePreview = false;
+      title.icons = "boring";
+      spelling.autocomplete = "smollm";
+      stt.enabled = false;
+      startup.checkUpdate = false;
+      power.sleepPrevention = "idle";
+      compaction.idleEnabled = true;
+      ttsr.contextMode = "keep";
+      astGrep.enabled = true;
+      speechgen.enabled = true;
+      generate_image.enabled = true;
+      computer.enabled = true;
+      github.enabled = true;
+      security.enabled = true;
+      disassembler.backend = "ghidra";
+      todo.reminders = false;
+      secrets.enabled = true;
     };
   };
 
