@@ -279,14 +279,7 @@ jobs:
           # 6. Update mise
           nix run .#mise-release -- --output packages/mise-release.json
 
-          # 7. Update ChatGPT. A feed failure or changed release identity keeps
-          # the current pin and lets the other updates through.
-          if ! nix run .#chatgpt-release -- --output packages/chatgpt-version.json; then
-            echo "::warning title=ChatGPT update skipped::chatgpt-release failed; keeping the current pin in packages/chatgpt-version.json."
-            git checkout -- packages/chatgpt-version.json
-          fi
-
-          # 8. Update T3 Code. A release can be published before its assets
+          # 7. Update T3 Code. A release can be published before its assets
           # and digests are, so a failure here keeps the current pin and lets
           # the other updates through, with the updater's message in the warning.
           t3code_status=0
@@ -370,7 +363,6 @@ jobs:
           fi
           commit_if_pin_changed t3code packages/t3code-release.json
           commit_if_pin_changed opencode packages/opencode-release.json
-          commit_if_pin_changed chatgpt packages/chatgpt-version.json
           commit_if_pin_changed ant packages/ant-release.json
           commit_if_pin_changed mise packages/mise-release.json
           commit_if_pin_changed omp packages/omp-release.json flake.nix flake.lock

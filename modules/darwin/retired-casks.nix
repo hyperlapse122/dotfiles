@@ -4,6 +4,7 @@ let
   prefix = config.homebrew.prefix;
   brew = "${prefix}/bin/brew";
   retired = [
+    "chatgpt"
     "grok-bot"
     "orca"
     "wifiman"

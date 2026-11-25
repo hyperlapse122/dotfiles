@@ -44,9 +44,6 @@ in
   agent-plugin-release =
     pythonScriptCheck "agent-plugin-release" ../scripts/agent-plugin-release
       ./test_agent_plugin_release.py;
-  chatgpt-release = pythonScriptCheckWith {
-    nativeBuildInputs = [ pkgs.curl ];
-  } "chatgpt-release" ../scripts/chatgpt-release ./test_chatgpt_release.py;
   claude-desktop-release =
     pythonScriptCheck "claude-desktop-release" ../scripts/claude-desktop-release
       ./test_claude_desktop_release.py;

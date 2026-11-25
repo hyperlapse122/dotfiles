@@ -95,7 +95,6 @@ let
       boot-layout-invariants = import ./boot-layout-invariants.nix { inherit pkgs self; };
       bootstrap-recipients = import ./bootstrap-recipients.nix { inherit pkgs; };
       bootstrap-secrets = import ./bootstrap-secrets.nix { inherit pkgs self; };
-      chatgpt = import ./chatgpt.nix { inherit pkgs self; };
       check-shards-guard = import ./check-shards-guard.nix {
         inherit pkgs;
         # attrNames forces no check, so the guard never evaluates itself.

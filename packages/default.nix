@@ -15,8 +15,6 @@ in
   # Exposed so the release-tracking workflow invokes the packaged helper
   # rather than running scripts/ with whatever interpreter the runner has.
   agent-plugin-release = agentTools.agentPluginRelease;
-  chatgpt-release = agentTools.chatgptRelease;
-  chatgpt = import ./chatgpt.nix { inherit pkgs; };
   claude-desktop-release = agentTools.claudeDesktopRelease;
   claude-desktop = import ./claude-desktop.nix { inherit pkgs; };
   claude-code-release = agentTools.claudeCodeRelease;

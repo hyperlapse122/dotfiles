@@ -90,7 +90,6 @@ EOF
   printf '{"version": "1.0.0"}\n' >"$clone/packages/ant-release.json"
   printf '{"tag": "v0.40.16"}\n' >"$clone/packages/ollama-release.json"
   printf '{"zshLock":{"archives":[{"commit":"1111111111111111111111111111111111111111"}]}}\n' >"$clone/packages/prezto-pin.json"
-  printf '{"version": "1.0.0"}\n' >"$clone/packages/chatgpt-version.json"
   printf '{"version": "0.0.45"}\n' >"$clone/packages/t3code-release.json"
   printf '{"version": "2.3.1", "platforms": {}}\n' >"$clone/packages/opencode-release.json"
   printf '{"version": "19.1.1", "rev": "3333333333333333333333333333333333333333", "platforms": {}}\n' >"$clone/packages/omp-release.json"
@@ -170,14 +169,6 @@ case "\$*" in
   "run .#prezto-release -- --output packages/prezto-pin.json")
     if [[ \${FAIL_PREZTO:-0} == 1 ]]; then exit 1; fi
     printf '{"zshLock":{"archives":[{"commit":"2222222222222222222222222222222222222222"}]}}\n' >packages/prezto-pin.json
-    ;;
-  "run .#chatgpt-release -- --output packages/chatgpt-version.json")
-    if [[ " \${FAIL_SOFT:-} " == *" chatgpt "* ]]; then
-      printf '{"version": "partial' >packages/chatgpt-version.json
-      echo "chatgpt-release: feed failure" >&2
-      exit 1
-    fi
-    printf '{"version": "1.2.0"}\n' >packages/chatgpt-version.json
     ;;
   "run .#t3code-release -- --output packages/t3code-release.json")
     if [[ " \${FAIL_SOFT:-} " == *" t3code "* ]]; then
@@ -321,16 +312,15 @@ grep -q 'the omp input locked 5555555555555555555555555555555555555555, but pack
   fail "update step did not name both omp revisions: $(cat "$scratch/update-omp-rev-mismatch-step.log")"
 pass 'the update step stops when the omp lock differs from the pinned revision'
 
-read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=chatgpt t3code opencode pi acpx codex ollama")"
+read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=t3code opencode pi acpx codex ollama")"
 ((status == 0)) || fail "soft-failing updaters aborted the update step: $(cat "$scratch/update-soft-fail-step.log")"
-for title in "ChatGPT update skipped" "T3 Code update skipped" "OpenCode update skipped" "Pi update skipped" "acpx update skipped" "Codex update skipped" "Ollama update skipped"; do
+for title in "T3 Code update skipped" "OpenCode update skipped" "Pi update skipped" "acpx update skipped" "Codex update skipped" "Ollama update skipped"; do
   grep -q "^::warning title=$title::" "$scratch/update-soft-fail-step.log" ||
     fail "missing warning for '$title': $(cat "$scratch/update-soft-fail-step.log")"
 done
 grep -q '^::warning title=T3 Code update skipped::.*lists 0 t3-0.0.47-linux-arm64.tar.gz assets' "$scratch/update-soft-fail-step.log" ||
   fail "the T3 Code warning does not carry the updater's message: $(cat "$scratch/update-soft-fail-step.log")"
 [[ -z $("$git_bin" -C "$clone" status --porcelain \
-  packages/chatgpt-version.json \
   packages/t3code-release.json \
   packages/opencode-release.json \
   packages/ollama-release.json \
@@ -339,7 +329,7 @@ grep -q '^::warning title=T3 Code update skipped::.*lists 0 t3-0.0.47-linux-arm6
   packages/acpx/package-lock.json \
   packages/codex-release.json) ]] ||
   fail "soft-failing updaters left partial changes in their pin or lock files"
-pass 'soft-failing updaters (chatgpt, t3code, opencode, pi, acpx, codex, ollama) warn, restore their files, and let the step continue'
+pass 'soft-failing updaters (t3code, opencode, pi, acpx, codex, ollama) warn, restore their files, and let the step continue'
 
 read -r status clone <<<"$(run_update_step update-claude-code-failure "FAIL_SOFT=claude-code")"
 ((status == 0)) || fail "a failing Claude Code release aborted the update step"

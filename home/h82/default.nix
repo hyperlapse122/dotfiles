@@ -63,7 +63,6 @@ in
     )
     ++ gui [
       (import ../../packages/claude-desktop.nix { inherit pkgs; })
-      (import ../../packages/chatgpt.nix { inherit pkgs; })
     ]
     ++ [
       (import ../../packages/claude-code.nix { inherit pkgs; })

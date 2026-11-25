@@ -68,8 +68,6 @@ let
 
   serveHtml = pythonHelper "serve-html" ../scripts/serve-html;
 
-  chatgptRelease = pythonHelper "chatgpt-release" ../scripts/chatgpt-release;
-
   # Resolves the latest release of Claude Desktop from the Debian APT repository.
   claudeDesktopRelease = pythonHelper "claude-desktop-release" ../scripts/claude-desktop-release;
 
@@ -166,7 +164,6 @@ in
     agentPluginSync
     agentPluginRelease
     claudeDesktopRelease
-    chatgptRelease
     claudeCodeRelease
     miseRelease
     preztoRelease

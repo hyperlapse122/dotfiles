@@ -130,7 +130,6 @@ let
       (cask: check (lib.elem cask mapping.casks) "${cask} is not among the macOS casks")
       [
         "adguard"
-        "chatgpt"
         "ghostty"
         "ollama-app"
         "1password"
@@ -747,6 +746,10 @@ let
       (check (!lib.elem "grok-bot" mapping.casks)
         "${entry.name}: modules/shared/darwin-apps.nix must map no grok-bot, or an apply would install the cask it removes"
       )
+      (check (!lib.elem "chatgpt" mapping.casks)
+        "${entry.name}: modules/shared/darwin-apps.nix must map no chatgpt, or an apply would install the cask it removes"
+      )
+      (check (hasInfixInLines "list --cask chatgpt" activationWithoutStorePaths) "${entry.name}: the retired-cask step must remove the ChatGPT cask")
       (check (config.homebrew.masApps == { } && !(config.programs.mas.enable or false))
         "${entry.name}: homebrew.masApps must stay empty and programs.mas off; both can abort or end activation"
       )
@@ -1130,7 +1133,6 @@ let
         ++ [ "/Applications/Ghostty.app" ]
         ++ lib.optional t3 "${home}/Applications/Home Manager Apps/${import ../packages/t3code-app-bundle.nix}"
         ++ [
-          "/Applications/ChatGPT.app"
           "/Applications/Claude.app"
         ];
       appsOf =

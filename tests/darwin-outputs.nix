@@ -375,13 +375,6 @@ let
       fi
       [ ! -e "$gen/home-path/bin/docker" ] || bad "Podman docker wrapper reached Darwin"
 
-      if [ -d "$gen/LaunchAgents" ]; then
-        if find -L "$gen/LaunchAgents" -type f -iname '*chatgpt*' -print | grep . >/dev/null \
-          || grep -Riq -- 'chatgpt' "$gen/LaunchAgents"; then
-          bad "ChatGPT login startup is unsupported but a launch agent exists"
-        fi
-      fi
-
       # A plist with its whitespace removed, so a key and its value are adjacent.
       agent() { tr -d ' \t\n' 2>/dev/null < "$gen/LaunchAgents/org.nix-community.home.$1.plist" || true; }
       [ -z "$(agent podman-machine-podman-machine-default)" ] || bad "Podman watchdog reached Darwin"
@@ -695,6 +688,7 @@ let
       flightyline=$(lineof 'if ! appStoreMas install 1358823008 && ! appStoreMas get 1358823008; then'); flightyline=''${flightyline:-0}
       retiredbrewline=$(lineof ${lib.escapeShellArg ''PATH="${config.homebrew.prefix}/bin:$PATH" /usr/bin/sudo --preserve-env=PATH --user=${config.system.primaryUser} --set-home /usr/bin/env NONINTERACTIVE=1 ${brewExe} "$@"''}); retiredbrewline=''${retiredbrewline:-0}
       retiredlistline=$(lineof ${lib.escapeShellArg ''if [ -z "$retiredList" ] || [ "$retiredList" = "Error: Cask 'grok-bot' is not installed." ]; then''}); retiredlistline=''${retiredlistline:-0}
+      retiredchatgptline=$(lineof ${lib.escapeShellArg "if ! retiredList=$(retiredBrew list --cask chatgpt 2>&1 >/dev/null); then"}); retiredchatgptline=''${retiredchatgptline:-0}
       retiredline=$(lineof 'elif ! retiredBrew uninstall --cask --force grok-bot; then'); retiredline=''${retiredline:-0}
       hmline=$(lineof "echo Activating home-manager configuration for "); hmline=''${hmline:-0}
       if [ "$bundleline" = 0 ] || [ "$hmline" = 0 ]; then
@@ -715,8 +709,8 @@ let
       elif ! [ "$kakaoline" -lt "$flightyline" ] || ! [ "$flightyline" -lt "$hmline" ]; then
         bad "the Flighty step does not run after the KakaoTalk step and before Home Manager"
       fi
-      if [ "$retiredbrewline" = 0 ] || [ "$retiredlistline" = 0 ] || [ "$retiredline" = 0 ]; then
-        bad "the system activation has no retired-cask step running brew through sudo for grok-bot, telling not-installed from other brew list failures, and uninstalling with --force"
+      if [ "$retiredbrewline" = 0 ] || [ "$retiredlistline" = 0 ] || [ "$retiredchatgptline" = 0 ] || [ "$retiredline" = 0 ]; then
+        bad "the system activation has no retired-cask step running brew through sudo for grok-bot and chatgpt, telling not-installed from other brew list failures, and uninstalling with --force"
       elif ! [ "$bundleline" -lt "$retiredbrewline" ] || ! [ "$flightyline" -lt "$retiredbrewline" ] || ! [ "$retiredbrewline" -lt "$retiredlistline" ] || ! [ "$retiredlistline" -lt "$retiredline" ] || ! [ "$retiredline" -lt "$hmline" ]; then
         bad "the retired-cask step does not run after brew bundle and the Flighty step and before Home Manager"
       fi
