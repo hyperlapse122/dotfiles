@@ -110,7 +110,7 @@ def number(value, default=0):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else default
 
 
-def model_row(provider, model_id, details, listed):
+def model_row(model_id, details, listed):
     limit = details.get("limit") if isinstance(details.get("limit"), dict) else {}
     context, output = limit.get("context"), limit.get("output")
     if is_int(listed.get("max_input_tokens")):
@@ -154,7 +154,7 @@ def snapshot_rows(provider, listed, models_dev):
             log(f"{model_id} passes the {provider} filter but models.dev has no entry for it; leaving it out")
             continue
         try:
-            rows.append(model_row(provider, model_id, details, listed[model_id]))
+            rows.append(model_row(model_id, details, listed[model_id]))
         except Failure as exc:
             log(f"{model_id}: {exc}; leaving it out")
     if not rows:

@@ -13,7 +13,8 @@ os.environ["SSL_CERT_FILE"] = "@caBundle@"
 import pygit2
 
 SHELL_TOOLS = {'bash', 'shell'}
-EDIT_TOOLS = {'edit', 'write', 'multiedit'}
+EDIT_TOOLS = {'edit', 'write', 'multiedit', 'patch'}
+PATCH_PATH = re.compile(r'^\*\*\* (?:Add File:|Update File:|Delete File:|Move to:)\s+(.+)$')
 TEST_NAME = re.compile(r'(?i:^test_|(?:_test|\.test|\.spec)\.[^.]+$)|Tests?\.swift$')
 ASSIGNMENT = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*=')
 
@@ -88,6 +89,13 @@ def skips_hooks(command):
 
 
 def edit_paths(tool, inputs):
+    if tool == 'patch':
+        patch = inputs.get('patchText') or inputs.get('patch')
+        if isinstance(patch, str):
+            for line in patch.splitlines():
+                if matched := PATCH_PATH.match(line):
+                    yield matched[1]
+        return
     path = inputs.get('file_path') or inputs.get('path') or inputs.get('filePath')
     if isinstance(path, str) and path:
         yield path

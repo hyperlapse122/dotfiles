@@ -11,7 +11,7 @@ def json_write(path, data):
     path.write_text(json.dumps(data))
 
 
-def reconcile(root, merger, enabled, disabled, preserve_slots):
+def reconcile(root, merger, enabled, disabled):
     settings = root / 'home' / 'settings.json'
     settings.parent.mkdir(exist_ok=True)
     custom_before = {'matcher': 'Write', 'hooks': [{'type': 'command', 'command': 'echo first'}]}
@@ -35,33 +35,25 @@ def reconcile(root, merger, enabled, disabled, preserve_slots):
     assert pre[0] == custom_before and pre[2] == custom_after
     assert pre[1]['hooks'][0]['command'] != old_handler['command']
     post = installed['hooks']['PostToolUse']
-    if preserve_slots:
-        assert post == [custom_before, {'matcher': '^dotfiles-agent-quality-disabled$', 'hooks': []}, custom_after]
-    else:
-        assert post == [custom_before, custom_after]
+    assert post == [custom_before, custom_after]
     shared = installed['hooks']['Stop'][1]
-    assert shared['hooks'] == ([{'type': 'command', 'command': ':', 'statusMessage': 'Dotfiles agent quality'},
-                                custom_handler] if preserve_slots else [custom_handler])
+    assert shared['hooks'] == [custom_handler]
     assert installed['hooks']['Stop'][0] == custom_before and installed['hooks']['Stop'][2] == custom_after
     assert installed['other'] == seed['other']
     assert apply(enabled) == installed
     removed = apply(disabled)
-    expected_pre = ([custom_before, {'matcher': '^dotfiles-agent-quality-disabled$', 'hooks': []}, custom_after]
-                    if preserve_slots else [custom_before, custom_after])
+    expected_pre = [custom_before, custom_after]
     assert removed['hooks']['PreToolUse'] == expected_pre
     assert removed['hooks']['PostToolUse'] == post
     assert removed['hooks']['Stop'] == installed['hooks']['Stop']
     reenabled = apply(enabled)
-    if preserve_slots:
-        assert reenabled == installed
-    else:
-        assert reenabled['hooks']['PreToolUse'] == [custom_before, custom_after, pre[1]]
-        assert reenabled['hooks']['PostToolUse'] == post
-        assert reenabled['hooks']['Stop'] == installed['hooks']['Stop']
+    assert reenabled['hooks']['PreToolUse'] == [custom_before, custom_after, pre[1]]
+    assert reenabled['hooks']['PostToolUse'] == post
+    assert reenabled['hooks']['Stop'] == installed['hooks']['Stop']
     return installed['hooks']
 
 
-def exercise(root, hooks, harness):
+def exercise(root, hooks):
     project = root / 'fixture with spaces'
     project.mkdir()
     git = ['git', '-C', str(project)]
@@ -96,6 +88,10 @@ def exercise(root, hooks, harness):
     result = run('PreToolUse', 'Edit', {'file_path': 'tests/a.txt'})
     assert result.returncode == 2 and 'frozen' in result.stderr, result
     assert run('PreToolUse', 'Edit', {'file_path': 'src/a.txt'}).returncode == 0
+    for source, target in (('tests/a.txt', 'src/a.txt'), ('src/a.txt', 'tests/a.txt')):
+        patch = {'patchText': f'*** Begin Patch\n*** Update File: {source}\n*** Move to: {target}\n@@\n-x\n+y\n*** End Patch'}
+        result = run('PreToolUse', 'patch', patch)
+        assert result.returncode == 2 and 'frozen' in result.stderr, result
     marker.unlink()
     assert run('PreToolUse', 'Edit', {'file_path': 'tests/a.txt'}).returncode == 0
 
@@ -104,8 +100,7 @@ if __name__ == '__main__':
     merger, claude_on, claude_off = sys.argv[1:]
     with TemporaryDirectory() as directory:
         root = Path(directory).resolve()
-        for harness, on, off in (('claude', claude_on, claude_off),):
-            fixture = root / harness
-            fixture.mkdir()
-            hooks = reconcile(fixture, merger, on, off, preserve_slots=False)
-            exercise(fixture, hooks, harness)
+        fixture = root / 'claude'
+        fixture.mkdir()
+        hooks = reconcile(fixture, merger, claude_on, claude_off)
+        exercise(fixture, hooks)

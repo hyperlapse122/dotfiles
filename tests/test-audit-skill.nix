@@ -1,4 +1,4 @@
-# Checks the adapted test-audit reference, its support files, attribution, and delivery under engineering-lenses in all four harness roots.
+# Checks the adapted test-audit reference, its support files, attribution, and delivery under engineering-lenses in the three harness roots.
 {
   pkgs,
   self,
@@ -91,8 +91,6 @@ let
           failed=1
         fi
         description=${frontmatter "description" ''"$dir/test-audit.md"''}
-        # A YAML value that parses to nothing (quotes around nothing or only
-        # whitespace, null, ~) is empty and invalid.
         description=$(printf '%s' "$description" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/; s/^[[:space:]]+//; s/[[:space:]]+$//')
         case "$description" in
           "" | null | Null | NULL | "~") description= ;;

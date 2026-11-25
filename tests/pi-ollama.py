@@ -65,7 +65,7 @@ try:
         for provider in ('synthetic', 'anthropic'):
             models['providers'].setdefault(provider, {})['baseUrl'] = cloud_endpoint + '/cloud/' + provider
         (agent / 'models.json').write_text(json.dumps(models))
-        auth = {provider: {'type': 'api_key', 'key': 'FAKE'} for provider in ('anthropic',)}
+        auth = {'anthropic': {'type': 'api_key', 'key': 'FAKE'}}
         (agent / 'auth.json').write_text(json.dumps(auth))
         (home / 'fixture.txt').write_text('safe local fixture\n')
         executable = home / 'pi'

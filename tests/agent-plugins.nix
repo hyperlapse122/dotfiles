@@ -153,8 +153,6 @@ let
           failed=1
         fi
 
-        # The invocation is read from the flags the helper is actually given,
-        # not merely whether the script mentions a path somewhere.
         ${lib.concatMapStrings (harness: ''
           block=$(blockForHarness ${esc script} ${esc pluginName} ${esc harness.name})
           if [ -z "$block" ]; then

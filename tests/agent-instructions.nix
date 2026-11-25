@@ -32,6 +32,7 @@ let
   ];
   retiredPaths = [
     ".local/share/nix-config/claude-code-agents.json"
+    ".codex/AGENTS.md"
     ".gemini/config/rules"
     ".t3/instructions/claude-code/CLAUDE.md"
     ".grok/AGENTS.md"

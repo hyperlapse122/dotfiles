@@ -144,10 +144,9 @@ pkgs.testers.nixosTest {
         opencode_go = "/run/secrets/cli-auth/opencode_go_api_key"
         machine.succeed("runuser -u alice -- cat " + opencode_go + " | grep -qx 'FAKE opencode go'")
         machine.succeed("test $(stat -L -c '%a:%U' " + opencode_go + ") = 400:alice")
-        for provider in ("anthropic",):
-            key = "/run/secrets/cli-auth/" + provider + "_api_key"
-            machine.succeed(f"runuser -u alice -- cat {key} | grep -qx 'FAKE {provider}'")
-            machine.succeed(f"test $(stat -L -c '%a:%U' {key}) = 400:alice")
+        key = "/run/secrets/cli-auth/anthropic_api_key"
+        machine.succeed("runuser -u alice -- cat " + key + " | grep -qx 'FAKE anthropic'")
+        machine.succeed("test $(stat -L -c '%a:%U' " + key + ") = 400:alice")
     verify()
     machine.succeed(switch)
     verify()

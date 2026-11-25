@@ -1,4 +1,4 @@
-# Checks the pinned Korean writing references, their licenses, and the exact shared domain targets in all four materialized harness roots.
+# Checks the pinned Korean writing references, their licenses, and the exact shared domain targets in the three materialized harness roots.
 {
   entries ? null,
   pkgs,
@@ -38,6 +38,7 @@ let
 
   forbiddenRoots = [
     ".agents/skills"
+    ".codex/skills"
   ];
 
   registry = import ../home/h82/agents/korean-skills-pin.nix;
@@ -114,8 +115,6 @@ let
           NR > 1 && $0 == "---" { exit }
           NR > 1 && /^description:/ { sub(/^description:[ ]*/, ""); print; exit }
         ' "$dir/${name}.md")
-        # A YAML value that parses to nothing (quotes around nothing or only
-        # whitespace, null, ~) is empty and invalid.
         description=$(printf '%s' "$description" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/; s/^[[:space:]]+//; s/[[:space:]]+$//')
         case "$description" in
           "" | null | Null | NULL | "~") description= ;;

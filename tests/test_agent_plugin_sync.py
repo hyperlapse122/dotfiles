@@ -432,6 +432,14 @@ class RetireTestCase(FakeCliCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn('--source', result.stderr)
 
+    def test_unknown_harness_is_rejected(self):
+        result = self.invoke(
+            ['--retire', '--harness', 'antigravity', '--cli', str(self.cli), '--base', str(self.base),
+             '--plugin', 'p', '--marketplace', 'm']
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(self.read_state()['calls'], [])
+
 
 CE_ID = 'compound-engineering@compound-engineering-plugin'
 

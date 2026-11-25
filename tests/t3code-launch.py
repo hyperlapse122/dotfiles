@@ -19,6 +19,8 @@ def validate(home, expected_opencode_addition):
     providers = settings['providerInstances']
     assert providers.get('grok') == {'driver': 'grok', 'enabled': False}
     assert 'grok' not in settings.get('providers', {}), 'legacy Grok provider still exists'
+    assert 'codex' not in providers, 'retired Codex instance still exists'
+    assert 'codex' not in settings.get('providers', {}), 'legacy Codex provider still exists'
     assert not (home / '.t3/userdata/instructions/grok.md').exists()
     args = shlex.split(providers['claudeAgent']['config']['launchArgs'])
     addition = Path(args[args.index('--append-system-prompt-file') + 1]).read_text()
@@ -51,6 +53,7 @@ def validate(home, expected_opencode_addition):
     assert settings['fallbackModelSelection'] == {'instanceId': 'pi', 'model': 'synthetic/hf:zai-org/GLM-5.3-Flash', 'options': [{'id': 'thinking', 'value': 'high'}]}
     assert settings['defaultThreadEnvMode'] == 'worktree'
     client = json.loads((home / '.t3/userdata/client-settings.json').read_text())
+    assert 'codex' not in client.get('providerModelPreferences', {}), 'retired Codex model preference still exists'
     assert client['providerModelPreferences']['pi']['hiddenModels'] == [
         'user-hidden', 'default', 'synthetic/infinite:small:vision',
         'synthetic/syn:large:text', 'synthetic/syn:large:vision',
@@ -145,16 +148,20 @@ def main():
             settings.parent.mkdir(parents=True)
             settings.write_text(json.dumps({
                 'unrelated': {'keep': True},
-                'providers': {'grok': {'enabled': True}},
+                'providers': {'grok': {'enabled': True}, 'codex': {'enabled': True}},
                 'providerInstances': {
                     'omp': {'enabled': True},
                     'grok': {'driver': 'grok', 'enabled': True,
                              'config': {'binaryPath': '/old/t3-grok-instructions'},
                              'environment': [{'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1'}]},
+                    'codex': {'driver': 'codex', 'enabled': True, 'config': {'homePath': '~/.codex'}},
                     'custom-grok': {'driver': 'grok', 'enabled': False},
                 },
             }))
-            (settings.parent / 'client-settings.json').write_text(json.dumps({'providerModelPreferences': {'pi': {'hiddenModels': ['user-hidden']}}}))
+            (settings.parent / 'client-settings.json').write_text(json.dumps({'providerModelPreferences': {
+                'pi': {'hiddenModels': ['user-hidden']},
+                'codex': {'hiddenModels': ['gpt-6-luna']},
+            }}))
             context = home / 'context.json'
             context.write_text(json.dumps({'kind': 'darwin', 'locale': {'name': 'C.UTF-8', 'language': 'en'}}))
             subprocess.run([sys.executable, entry['helper'], '--context', str(context), '--template', entry['template'],

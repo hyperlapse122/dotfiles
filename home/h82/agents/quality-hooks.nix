@@ -32,7 +32,6 @@ let
     statusMessage = "Dotfiles agent quality";
     commandPrefix = "/nix/store/";
     commandSuffix = "-agent-quality-hook/bin/agent-quality-hook";
-    disabledMatcher = "^dotfiles-agent-quality-disabled$";
   };
   group =
     enabled: phase: matcher:
@@ -53,7 +52,6 @@ in
   inherit enable;
   hookGroups = {
     inherit identity;
-    preserveSlots = false;
     events = {
       PreToolUse = group (preTools != "") "pre" preTools;
       PostToolUse = { };

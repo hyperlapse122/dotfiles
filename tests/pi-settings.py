@@ -55,9 +55,8 @@ with tempfile.TemporaryDirectory() as directory:
         assert settings['extensions'][0] == user_extension
         assert settings['extensions'].count(quality_extension) == 1
 
-    listed = [f'{provider}/{row["id"]}'
-              for provider in ('anthropic',)
-              for row in json.loads((agents / f'{provider}-models.json').read_text())['models']]
+    listed = [f'anthropic/{row["id"]}'
+              for row in json.loads((agents / 'anthropic-models.json').read_text())['models']]
     selected = settings['enabledModels']
     assert settings['defaultProvider'] == 'synthetic'
     assert 'synthetic/' + settings['defaultModel'] in selected or 'synthetic/*' in selected

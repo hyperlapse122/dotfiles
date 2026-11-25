@@ -736,6 +736,7 @@ let
         "${entry.name}: modules/shared/darwin-apps.nix must map no chatgpt, or an apply would install the cask it removes"
       )
       (check (hasInfixInLines "list --cask chatgpt" activationWithoutStorePaths) "${entry.name}: the retired-cask step must remove the ChatGPT cask")
+      (check (hasInfixInLines "uninstall --cask --force chatgpt" activationWithoutStorePaths) "${entry.name}: the retired-cask step must uninstall the ChatGPT cask with --force")
       (check (config.homebrew.masApps == { } && !(config.programs.mas.enable or false))
         "${entry.name}: homebrew.masApps must stay empty and programs.mas off; both can abort or end activation"
       )

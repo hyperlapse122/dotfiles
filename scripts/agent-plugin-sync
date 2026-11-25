@@ -4,8 +4,7 @@
 Creates a version-keyed symlink to the pinned source, drives the agent's own
 plugin commands against that path, and removes superseded versions only after
 the registration is observed pointing at the current one. --harness picks the
-agent (claude); each has its own adapter for commands, listings and
-manifest paths.
+agent (claude), whose adapter supplies commands, listings and manifest paths.
 
 With --retire it does the reverse for a plugin the repository no longer
 declares: unregister it and delete its version-keyed base directory.

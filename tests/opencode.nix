@@ -96,8 +96,6 @@ let
       }) hiddenSynthetic
     );
 
-  # The Anthropic list Pi declares, as OpenCode shows it. No entry is
-  # disabled: OpenCode's own catalog keeps every other model.
   expectedList =
     file: contextLimit:
     builtins.listToAttrs (

@@ -4,6 +4,8 @@ The helper's `curl` command is stubbed on `PATH`, so these tests feed it
 fixture bodies and record what it was asked instead of making network calls.
 """
 
+import importlib.machinery
+import importlib.util
 import json
 import os
 import subprocess
@@ -15,6 +17,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/provider-models-watch"
 KEYS = {"anthropic": "ANTHROPIC_API_KEY"}
+
+
+def load_watch():
+    loader = importlib.machinery.SourceFileLoader("provider_models_watch", str(SCRIPT))
+    module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    loader.exec_module(module)
+    return module
 
 FAKE_CURL = """#!{python}
 import json, os, sys
@@ -216,6 +225,8 @@ class WatchTestCase(unittest.TestCase):
         calls = json.loads(self.log.read_text())
         self.assertIn("x-api-key: FAKE-KEY", calls[0]["stdin"])
         self.assertIn("anthropic-version", calls[0]["stdin"])
+        self.assertIn("--max-redirs", calls[0]["argv"])
+        self.assertNotIn("FAKE-KEY", " ".join(calls[0]["argv"]))
         self.assertEqual(calls[0]["argv"][-1],
                          "https://api.anthropic.com/v1/models?lifecycle=active&limit=1000")
 
@@ -224,6 +235,8 @@ class WatchTestCase(unittest.TestCase):
         self.run_watch(outcomes)
         calls = json.loads(self.log.read_text())
         self.assertEqual(calls[1]["stdin"], "")
+        self.assertNotIn("-H", calls[1]["argv"])
+        self.assertNotIn("--max-redirs", calls[1]["argv"])
         self.assertEqual(calls[1]["argv"][-1], "https://models.dev/api.json")
 
     def test_a_missing_key_fails_before_any_fetch(self):
@@ -263,13 +276,17 @@ class WatchTestCase(unittest.TestCase):
 
 class CommittedSnapshotTestCase(unittest.TestCase):
     def test_the_committed_anthropic_snapshot_is_sorted_distinct_complete_rows_that_pass_the_filter(self):
+        watch = load_watch()
         snapshot = json.loads((ROOT / "home/h82/agents/anthropic-models.json").read_text())
         rows = snapshot["models"]
         ids = [row["id"] for row in rows]
-        self.assertEqual(ids, sorted(ids))
-        self.assertEqual(len(ids), len(set(ids)))
+        self.assertTrue(ids)
+        self.assertEqual(ids, sorted(set(ids)))
         for row in rows:
-            self.assertRegex(row["id"], r"^claude-\w+-[0-9\-.]+$")
+            self.assertTrue(watch.passes_filter("anthropic", row["id"]), row["id"])
+            self.assertEqual(sorted(row),
+                             ["contextWindow", "cost", "id", "input", "maxTokens", "name", "reasoning"])
+            self.assertEqual(sorted(row["cost"]), ["cacheRead", "cacheWrite", "input", "output"])
             self.assertTrue(row["name"])
             self.assertIsInstance(row["reasoning"], bool)
             self.assertTrue(row["input"])

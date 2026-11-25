@@ -135,11 +135,6 @@ let
         key = "codex";
         prune = true;
       }
-      {
-        path = [ "providerModelPreferences" ];
-        key = "codex";
-        prune = true;
-      }
     ];
     migrateInstances = {
       from = "providers";
@@ -416,6 +411,13 @@ let
       snapShotEnabled = true;
     };
     remove = [ ];
+    removePaths = [
+      {
+        path = [ "providerModelPreferences" ];
+        key = "codex";
+        prune = true;
+      }
+    ];
     setPaths = [ ];
     own = { };
   };

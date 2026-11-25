@@ -208,11 +208,6 @@ let
       key = "codex";
       prune = true;
     }
-    {
-      path = [ "providerModelPreferences" ];
-      key = "codex";
-      prune = true;
-    }
   ];
 
   # providers is the retired per-kind block T3 Code moves into
@@ -307,7 +302,18 @@ let
     t3codeClientSettings = {
       file = "client-settings.json";
       declared = pkgs.writeText "t3code-declared-client-settings.json" (
-        builtins.toJSON (declaration clientSettings)
+        builtins.toJSON (
+          (declaration clientSettings)
+          // {
+            removePaths = [
+              {
+                path = [ "providerModelPreferences" ];
+                key = "codex";
+                prune = true;
+              }
+            ];
+          }
+        )
       );
     };
   };

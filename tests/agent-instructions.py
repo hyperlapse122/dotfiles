@@ -69,6 +69,7 @@ def exercise(template, helper, renderer, kind, receipts):
                             '--renderer', renderer, '--home', str(root), '--kreadconfig', str(kread)], check=True)
         render()
         assert not (root / '.gemini').exists(), 'retired Gemini instructions were delivered'
+        assert not (root / '.codex').exists(), 'retired Codex instructions were delivered'
         for harness in DELIVERIES:
             text = body(root, harness)
             check_receipt(text, receipts, kind, harness)
@@ -108,6 +109,7 @@ def main():
             context = home / 't3.json'
             context.write_text('{"t3": true}')
             t3 = subprocess.check_output([renderer, sys.argv[1], str(context)], text=True)
+            assert not (home / '.codex').exists(), 'retired Codex instructions were delivered'
             for harness in DELIVERIES:
                 receipt(body(home, harness), receipts, entry['kind'], harness)
                 check_guides(home, body(home, harness), t3)

@@ -716,10 +716,6 @@ class OwnedKeyTests(unittest.TestCase):
         self.assertEqual(self.read()['foreign-status'], OWNED_EXISTING['foreign-status'])
 
 
-# TOML settings keep comments and tables the declaration does not name, and
-# the user edits the file by hand. Every declared key starts at the opposite
-# value, and the comments and tables the declaration does not name are the
-# bytes a re-serializing merger would lose.
 TOML_EXISTING = '''\
 # Written by hand; keep this comment.
 model = "test-model" # the user's model
