@@ -215,7 +215,6 @@ let
       deviceArgs = map androidPin.deviceArg (user.my.mobileDevices or [ ]);
       androidSdkRoot = "${config.my.user.home}/Library/Android/sdk";
       masExe = lib.getExe entry.host.pkgs.mas;
-      brewExe = "${config.homebrew.prefix}/bin/brew";
       peers = lib.concatStringsSep "," (expectedPeers user.home.packages);
       serveHtmlPackage =
         (import ../packages/agent-tools.nix { inherit (entry.host) pkgs; }).serveHtml or null;
