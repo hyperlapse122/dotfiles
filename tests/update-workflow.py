@@ -535,6 +535,7 @@ def behavioral_tests(workflow, publisher, verifier):
         require(not any(e['args'][:2] in (['pr', 'create'], ['pr', 'edit']) for e in f.events_of('gh')), 'superseded failure reached reconciliation')
         rounds = {e['round'] for e in f.events_of('verify') if e['scope'] == 'dependencies'}
         require(rounds == {1, 2}, 'superseded failure was not reverified exactly once: ' + repr(rounds))
+        require('verification failed' not in (f.root / 'summary').read_text(), 'superseded failure remained in the step summary')
         require('concurrent' in f.remote('concurrent.txt'), 'concurrent main commit was lost')
         verify_before_push(f)
     exercise(workflow, publisher, verifier, 'a failure against a superseded base retries instead of reconciling', superseded_failure, part='dependencies', move_fetch=2, verify_fail='before-rebase')
@@ -636,11 +637,16 @@ def mutation_tests(workflow, publisher, verifier):
     call = 'bash "$helpers/ci-update-verify" "$scope" "$logs/$attempt"'
     require(call in publisher, 'missing verification failure mutation anchor')
     caught('verification failure ignored', workflow, publisher.replace(call, call + ' || true'), verifier, no_push, 'failed verification reached push', part='catalogs', verify_fail='catalogs')
-    retry = 'before=$(git rev-parse HEAD)\nsync_main\nif [ "$verified" -eq 0 ] && [ "$(git rev-parse HEAD)" = "$before" ]; then\n  record_stage verification\n  echo \'Verification failed and main has not moved; nothing newer to retry against.\'\n  exit 1\nfi'
+    retry = 'before=$(git rev-parse HEAD)\nsync_main\n'
     require(retry in publisher, 'missing superseded-base retry mutation anchor')
     def stale_retried(f):
         require(f.ok, 'a failure against a superseded base was not retried')
-    caught('superseded-base retry removed', workflow, publisher.replace(retry, 'if [ "$verified" -eq 0 ]; then\n  record_stage verification\n  exit 1\nfi\nsync_main', 1), verifier, stale_retried, 'a failure against a superseded base was not retried', part='dependencies', move_fetch=2, verify_fail='before-rebase')
+    caught('superseded-base retry removed', workflow, publisher.replace(retry, 'if [ "$verified" -eq 0 ]; then\n  record_stage verification\n  exit 1\nfi\n' + retry, 1), verifier, stale_retried, 'a failure against a superseded base was not retried', part='dependencies', move_fetch=2, verify_fail='before-rebase')
+    summary_reset = 'truncate -s "$summary_size" "$GITHUB_STEP_SUMMARY"'
+    require(summary_reset in publisher, 'missing superseded summary reset mutation anchor')
+    def clean_summary(f):
+        require('verification failed' not in (f.root / 'summary').read_text(), 'superseded failure remained in the step summary')
+    caught('superseded failure summary retained', workflow, publisher.replace(summary_reset, ':', 1), verifier, clean_summary, 'superseded failure remained in the step summary', part='dependencies', move_fetch=2, verify_fail='before-rebase')
     wf = copy.deepcopy(workflow)
     step = next(s for s in wf['jobs']['update-dependencies']['steps'] if s.get('id') == 'publish_catalogs')
     step['if'] = step['if'].replace("steps.catalog.outputs.changed == 'true'", "steps.catalog.outputs.changed != 'unknown'")
