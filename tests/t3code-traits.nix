@@ -78,73 +78,7 @@ let
         When regenerating a title, correct the format even if the previous title names the right subject.
       '';
     };
-    remove = [ "reviewGuideModelSelection" ];
-    removePaths = [
-      {
-        path = [
-          "providerInstances"
-          "antigravity"
-          "config"
-        ];
-        key = "binaryPath";
-        value = "@RETIRED-AGY@";
-      }
-      {
-        path = [
-          "providerInstances"
-          "grok"
-        ];
-        key = "config";
-      }
-      {
-        path = [
-          "providerInstances"
-          "grok"
-        ];
-        key = "environment";
-      }
-      {
-        path = [ "providers" ];
-        key = "grok";
-        prune = true;
-      }
-      {
-        path = [ "providerInstances" ];
-        key = "omp";
-      }
-      {
-        path = [ "providers" ];
-        key = "omp";
-        prune = true;
-      }
-      {
-        path = [ "providerModelPreferences" ];
-        key = "omp";
-        prune = true;
-      }
-      {
-        path = [ "providerInstances" ];
-        key = "omp-codex";
-      }
-      {
-        path = [ "providerInstances" ];
-        key = "codex";
-      }
-      {
-        path = [ "providers" ];
-        key = "codex";
-        prune = true;
-      }
-    ];
-    migrateInstances = {
-      from = "providers";
-      to = "providerInstances";
-      kinds = [
-        "claudeAgent"
-        "opencode"
-        "pi"
-      ];
-    };
+    remove = [ ];
     setPaths = lib.sort (a: b: (lib.concatStringsSep "." a.path) < (lib.concatStringsSep "." b.path)) [
       {
         path = [
@@ -369,16 +303,6 @@ let
         }
       ];
     };
-    reviewGuideModelSelection = {
-      instanceId = "claudeAgent";
-      model = "claude-opus-5-5";
-      options = [
-        {
-          id = "effort";
-          value = "max";
-        }
-      ];
-    };
     threadTitleInstructions = "Use title case.";
     sourceControlWriterModelSelection = {
       instanceId = "claudeAgent";
@@ -411,13 +335,6 @@ let
       snapShotEnabled = true;
     };
     remove = [ ];
-    removePaths = [
-      {
-        path = [ "providerModelPreferences" ];
-        key = "codex";
-        prune = true;
-      }
-    ];
     setPaths = [ ];
     own = { };
   };
@@ -474,18 +391,6 @@ let
                 if merge.attr == "t3codeSettings" then
                   merge.contract
                   // {
-                    removePaths = map (
-                      row:
-                      if (row.value or null) == "@RETIRED-AGY@" then
-                        row
-                        // {
-                          value = noContext "${
-                            user.home.profileDirectory or "${user.home.homeDirectory}/.nix-profile"
-                          }/bin/agy_acp_server.par";
-                        }
-                      else
-                        row
-                    ) merge.contract.removePaths;
                     upsertPaths = [
                       {
                         path = [
@@ -503,15 +408,6 @@ let
                         };
                       }
                     ];
-                    migrateInstances = merge.contract.migrateInstances // {
-                      retireAntigravity = {
-                        profileBinary = noContext "${
-                          user.home.profileDirectory or "${user.home.homeDirectory}/.nix-profile"
-                        }/bin/agy_acp_server.par";
-                        registryCommand = "${user.home.homeDirectory}/.local/share/dotfiles/antigravity-acp/bin/antigravity-acp";
-                        instructions = "${user.home.homeDirectory}/.t3/userdata/instructions/antigravity.md";
-                      };
-                    };
                     setPaths = map (
                       row:
                       if lib.isString row.value && lib.hasAttr row.value profileBinaries then
