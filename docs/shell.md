@@ -24,33 +24,6 @@ On NixOS, an unchanged Home Manager generation does not necessarily activate aga
 The macOS integration invokes Home Manager activation directly on each apply.
 See [generations](../CONCEPTS.md#generations) and [activation reassertion](../CONCEPTS.md#coding-agent-configuration) for those distinctions.
 
-## Parity with the former chezmoi setup
-
-The comparison baseline is commit `501dfdf`, as requested in [issue #133](https://github.com/hyperlapse122/dotfiles/issues/133).
-The table records repository and sandbox evidence; actual-machine checks remain separate.
-
-| Issue gap | Disposition | Evidence or reason |
-| --- | --- | --- |
-| Automatic updates | Implemented | `prezto-release` discovers upstream's default branch, resolves every recursive gitlink, hashes downloaded archives, and atomically replaces the complete pin; the dependency workflow verifies it before publication. |
-| Submodule coverage | Verified in the package | All nine historically selected submodules remain pinned; the complete upstream tree also includes `fasd`, making eleven archives including Prezto itself. Install checks compare assembled submodule content and load sorin, powerline, agnoster, pure, and powerlevel10k. |
-| Module order | Restored | Utility precedes Git; interactive checks assert the selected order. |
-| Color style | Already supplied | The pinned Home Manager Prezto module emits the enabled color style; the interactive check queries it. Prezto retains its upstream behavior for dumb terminals. |
-| Conditional modules | Restored | Git requires `git`; Homebrew requires Darwin and `brew`; GPG requires `gpg-agent` and both SSH guard conditions. Generated module selection is executed with present and absent command fixtures. |
-| GPG_TTY | Already supplied | Interactive startup exports a nonempty terminal TTY; PTY checks verify it and preserve an existing SSH-agent socket under each guard. |
-| Completions | Verified | The package supplies gh, glab, ghq, mise, omp, and usage functions; interactive shells verify all six registrations and function definitions. Bash executes `_init_completion` through Home Manager's bash-completion package. |
-| mise activation | Already supplied | Home Manager emits mise's zsh activation; runtime checks require its shell hook. |
-| Environment | Completed | `NODE_USE_SYSTEM_CA=1` is retained and local binaries precede profile tools. Mise may prepend its shims, as it did after the old environment loader. The retired chezmoi helper-bin path is unnecessary for store-managed tools. |
-| Single initialization | Verified | Login and non-login shells initialize Prezto exactly once, checked through execution tracing. History keeps its XDG state path, 10,000-entry limits, extended format, duplicate handling, and sharing. |
-| User-owned files | Documented and verified | Actual generated collision checks preserve conflicting contents, accept identical files and managed links, and leave root `.zshrc` unmanaged. Fresh-shell checks prove the old root `.zshrc` is inactive. |
-
-The old bash-completion 2.18.0 asset was loaded by the Bash branch of `home/.chezmoitemplates/cli-completions-shell`.
-The zsh branch used native zsh completions; it did not enable a Bash-completion bridge.
-Nix supplies Bash completion through Home Manager, so the separate chezmoi asset and loader are unnecessary.
-
-The `fasd` archive retains a dangling link to a manual page that upstream removed.
-Packaging removes that one unusable documentation link while retaining the executable and the default broken-symlink check.
-Archive hashes still cover the original downloaded bytes; normal Nix shebang adaptation also applies to installed scripts.
-
 ## Updating Prezto
 
 The unified maintenance workflow runs every 30 minutes and can also be dispatched manually with `part: dependencies` or `part: all`.

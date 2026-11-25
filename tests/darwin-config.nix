@@ -288,24 +288,6 @@ let
       lineIndex = line: lib.lists.findFirstIndex (l: l == line) null rootLines;
       brewExe = "${config.homebrew.prefix}/bin/brew";
       brewLines = lib.filter (lib.hasInfix brewExe) rootLines;
-      retiredBrewCalls = lib.filter (
-        line: lib.hasInfix "retiredBrew " line && !lib.hasPrefix "retiredBrew()" line
-      ) rootLines;
-      retiredList = "if ! retiredList=$(retiredBrew list --cask grok-bot 2>&1 >/dev/null); then";
-      retiredStart = lineIndex retiredList;
-      retiredBlock = [
-        retiredList
-        ''if [ -z "$retiredList" ] || [ "$retiredList" = "Error: Cask 'grok-bot' is not installed." ]; then''
-        ''echo "retired casks: no grok-bot cask to remove" >&2''
-        "else"
-        ''echo "retired casks: could not tell whether grok-bot is installed: ''${retiredList//$'\n'/ }; run brew list --cask grok-bot as ${primaryUser}" >&2''
-        "fi"
-        "elif ! retiredBrew uninstall --cask --force grok-bot; then"
-        ''echo "retired casks: uninstalling grok-bot failed; run brew uninstall --cask --force grok-bot as ${primaryUser}" >&2''
-        "else"
-        ''echo "retired casks: removed the grok-bot cask" >&2''
-        "fi"
-      ];
       kakaoInstall = "if ! appStoreMas install ${kakaoTalkId} && ! appStoreMas get ${kakaoTalkId}; then";
       flightyInstall = "if ! appStoreMas install ${flightyId} && ! appStoreMas get ${flightyId}; then";
       # Where T3 Code's device hub looks when ANDROID_HOME is unset.
@@ -708,35 +690,15 @@ let
         )
         "${entry.name}: every brew call of the retired-cask step must run through /usr/bin/sudo --preserve-env=PATH --user=${primaryUser} with brew's prefix on PATH and the absolute brew path, since Homebrew refuses to run as root"
       )
-      (check (retiredBrewCalls != [ ] && lib.all guarded retiredBrewCalls)
-        "${entry.name}: every brew call of the retired-cask step must be guarded by if !, so a failed brew cannot abort activation"
-      )
-      (check
-        (
-          retiredStart != null && lib.sublist retiredStart (lib.length retiredBlock) rootLines == retiredBlock
-        )
-        "${entry.name}: the grok-bot cask must be uninstalled with --force when installed, a brew list failure other than not-installed must print brew's stderr, with one line per outcome and no exit on failure"
-      )
       (check (
         !hasInfixInLines "zap" activationWithoutStorePaths
       ) "${entry.name}: no activation step may zap a cask, since --zap deletes the app's user data")
-      (check
-        (
-          let
-            flighty = lineIndex flightyInstall;
-          in
-          flighty != null && retiredStart != null && flighty < retiredStart
-        )
-        "${entry.name}: the retired-cask step must run after the App Store app steps and before Home Manager"
-      )
       (check (!lib.elem "grok-bot" mapping.casks)
         "${entry.name}: modules/shared/darwin-apps.nix must map no grok-bot, or an apply would install the cask it removes"
       )
       (check (!lib.elem "chatgpt" mapping.casks)
         "${entry.name}: modules/shared/darwin-apps.nix must map no chatgpt, or an apply would install the cask it removes"
       )
-      (check (hasInfixInLines "list --cask chatgpt" activationWithoutStorePaths) "${entry.name}: the retired-cask step must remove the ChatGPT cask")
-      (check (hasInfixInLines "uninstall --cask --force chatgpt" activationWithoutStorePaths) "${entry.name}: the retired-cask step must uninstall the ChatGPT cask with --force")
       (check (config.homebrew.masApps == { } && !(config.programs.mas.enable or false))
         "${entry.name}: homebrew.masApps must stay empty and programs.mas off; both can abort or end activation"
       )

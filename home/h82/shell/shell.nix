@@ -111,18 +111,8 @@ in
     globalConfig.settings.all_compile = false;
   };
 
-  # Earlier generations left a writable config.toml, which would collide with
-  # the store link. The force mirrors the module's own condition, because a
-  # force on an entry the module does not declare leaves it with no source.
+  # A writable config.toml would collide with the store link. The force
+  # mirrors the module's own condition, because a force on an entry the
+  # module does not declare leaves it with no source.
   xdg.configFile = lib.mkIf miseManagesGlobal { "mise/config.toml".force = true; };
-
-  # Even with force, Home Manager leaves a regular file in place when its
-  # content matches the generated one, which would keep config.toml writable.
-  home.activation.miseReplaceWritableConfig = lib.mkIf miseManagesGlobal (
-    lib.hm.dag.entryBetween [ "linkGeneration" ] [ "writeBoundary" ] ''
-      if [[ -f ${lib.escapeShellArg miseGlobalConfig} && ! -L ${lib.escapeShellArg miseGlobalConfig} ]]; then
-        run rm $VERBOSE_ARG ${lib.escapeShellArg miseGlobalConfig}
-      fi
-    ''
-  );
 }

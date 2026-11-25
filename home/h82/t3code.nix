@@ -28,8 +28,6 @@ let
     ]) (import ./agents/pi-hidden-models.nix)
   );
 
-  retiredAntigravityBinary = "${profileDirectory}/bin/agy_acp_server.par";
-
   # OpenCode has no launch option for extra instructions, and a global
   # `instructions` entry would reach sessions outside T3 Code. T3 Code starts
   # its server with OPENCODE_CONFIG_CONTENT taken from the instance's
@@ -142,90 +140,6 @@ let
     };
   };
 
-  # Keys that used to be declared. agent-settings removes these: the merge only
-  # assigns, so dropping a key from settings alone would leave its last
-  # written value on every machine forever. Move it here instead, and delete
-  # the entry once every host has rebuilt past it.
-  retiredKeys = [
-    # Review guides follow the shared text generation selection.
-    "reviewGuideModelSelection"
-  ];
-
-  # Nested entries previously written by this module.
-  retiredPaths = [
-    {
-      path = [
-        "providerInstances"
-        "antigravity"
-        "config"
-      ];
-      key = "binaryPath";
-      value = retiredAntigravityBinary;
-    }
-    {
-      path = [
-        "providerInstances"
-        "grok"
-      ];
-      key = "config";
-    }
-    {
-      path = [
-        "providerInstances"
-        "grok"
-      ];
-      key = "environment";
-    }
-    {
-      path = [ "providers" ];
-      key = "grok";
-      prune = true;
-    }
-    {
-      path = [ "providerInstances" ];
-      key = "omp";
-    }
-    {
-      path = [ "providers" ];
-      key = "omp";
-      prune = true;
-    }
-    {
-      path = [ "providerModelPreferences" ];
-      key = "omp";
-      prune = true;
-    }
-    {
-      path = [ "providerInstances" ];
-      key = "omp-codex";
-    }
-    {
-      path = [ "providerInstances" ];
-      key = "codex";
-    }
-    {
-      path = [ "providers" ];
-      key = "codex";
-      prune = true;
-    }
-  ];
-
-  # providers is the retired per-kind block T3 Code moves into
-  # providerInstances on load, but only into an instance that does not exist
-  # yet. The instances declared above would make it skip theirs and drop the
-  # user's fields, so the merge moves those kinds first, the same way, and
-  # leaves the others for T3 Code.
-  instanceMigration = {
-    from = "providers";
-    to = "providerInstances";
-    kinds = lib.remove "grok" (lib.attrNames settings.providerInstances);
-    retireAntigravity = {
-      profileBinary = retiredAntigravityBinary;
-      registryCommand = "${config.home.homeDirectory}/.local/share/dotfiles/antigravity-acp/bin/antigravity-acp";
-      instructions = "${config.home.homeDirectory}/.t3/userdata/instructions/antigravity.md";
-    };
-  };
-
   # T3 Code writes a model selection whole, with options that belong to the
   # chosen model, so a selection is owned rather than merged leaf by leaf:
   # a leaf merge would keep a previous model's options.
@@ -291,10 +205,7 @@ let
           (declaration settings)
           // {
             own = modelSelections;
-            remove = retiredKeys;
-            removePaths = retiredPaths;
             upsertPaths = [ opencodeInstructions ];
-            migrateInstances = instanceMigration;
           }
         )
       );
@@ -302,18 +213,7 @@ let
     t3codeClientSettings = {
       file = "client-settings.json";
       declared = pkgs.writeText "t3code-declared-client-settings.json" (
-        builtins.toJSON (
-          (declaration clientSettings)
-          // {
-            removePaths = [
-              {
-                path = [ "providerModelPreferences" ];
-                key = "codex";
-                prune = true;
-              }
-            ];
-          }
-        )
+        builtins.toJSON (declaration clientSettings)
       );
     };
   };
