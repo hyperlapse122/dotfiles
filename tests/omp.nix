@@ -53,23 +53,69 @@ let
   # fails here rather than on a host.
   expectedYaml = (pkgs.formats.yaml { }).generate "expected-omp-config.yml" {
     modelRoles = {
-      default = "openrouter/deepseek/deepseek-v4.1-flash-1017:max";
-      smol = "openrouter/deepseek/deepseek-v4.1-flash-1017:auto";
-      slow = "openrouter/anthropic/claude-opus-5.5:medium";
-      judge = "ollama/clef-flash:latest";
-      dictation = "openrouter/openai/whisper-large-v3";
-      speech = "local/phonon-31m";
+      default = "synthetic/hf:deepseek-ai/DeepSeek-V4.1-Flash-1017:high";
+      smol = "synthetic/hf:openai/gpt-oss-120b:low";
+      slow = "synthetic/hf:moonshotai/Kimi-K3.1-Pro:max";
+      vision = "synthetic/hf:thinkingmachines/Inkling-2-Mini:low";
+      plan = "synthetic/hf:deepseek-ai/DeepSeek-V4.1-Flash-1017:max";
+      commit = "synthetic/hf:openai/gpt-oss-120b:low";
+      tiny = "synthetic/hf:openai/gpt-oss-120b:low";
+      memory = "synthetic/hf:thinkingmachines/Inkling-2-Mini:low";
+      task = "synthetic/hf:deepseek-ai/DeepSeek-V4.1-Flash-1017:max";
+      advisor = "synthetic/hf:deepseek-ai/DeepSeek-V4.1-Flash-1017:max";
+      widget = "synthetic/hf:openai/gpt-oss-120b:low";
       image = "openrouter/bytedance-seed/seedream-5-5";
-      web = "web/parallel";
+      web = "web/synthetic";
+      speech = "local/phonon-31m";
+      dictation = "local/whisper-large-v3-turbo";
+      judge = "ollama/clef-flash:latest,synthetic/hf:thinkingmachines/Inkling-2-Mini";
+    };
+    retry.fallbackChains = {
+      image = [ ];
+      web = [ ];
+      speech = [ ];
+      dictation = [ ];
+      judge = [ "synthetic/hf:thinkingmachines/Inkling-2-Mini" ];
+    };
+    mnemopi = {
+      embeddingModel = "qwen3-embedding:8b";
+      embeddingApiUrl = "http://127.0.0.1:11434/v1";
+      embeddingQueryPrefix = "Instruct: Given a question, retrieve stored memories that answer it\nQuery: ";
     };
     defaultThinkingLevel = "auto";
     composer.shape = "band";
     composer.tokenRate = true;
+    composer.predictionAlternatives = false;
     theme.dark = "titanium";
     theme.light = "light";
     update.auto = false;
     symbolPreset = "nerd";
     setupVersion = 3;
+    statusLine.sessionAccent = true;
+    statusLine.transparent = false;
+    terminal.showProgress = false;
+    tui.textSizing = true;
+    tui.hyperlinks = "auto";
+    tui.tight = false;
+    tui.imeSafeCursor = true;
+    display.shimmer = "kitt";
+    display.subagentLivePreview = false;
+    title.icons = "boring";
+    spelling.autocomplete = "smollm";
+    stt.enabled = false;
+    startup.checkUpdate = false;
+    power.sleepPrevention = "idle";
+    compaction.idleEnabled = true;
+    ttsr.contextMode = "keep";
+    astGrep.enabled = true;
+    speechgen.enabled = true;
+    generate_image.enabled = true;
+    computer.enabled = true;
+    github.enabled = true;
+    security.enabled = true;
+    disassembler.backend = "ghidra";
+    todo.reminders = false;
+    secrets.enabled = true;
   };
 
   authSync = "${

@@ -18,9 +18,6 @@ def validate(home, expected_opencode_addition):
     assert 'writing' in baseline.lower()
     providers = settings['providerInstances']
     assert providers.get('grok') == {'driver': 'grok', 'enabled': False}
-    assert 'grok' not in settings.get('providers', {}), 'legacy Grok provider still exists'
-    assert 'codex' not in providers, 'retired Codex instance still exists'
-    assert 'codex' not in settings.get('providers', {}), 'legacy Codex provider still exists'
     assert not (home / '.t3/userdata/instructions/grok.md').exists()
     args = shlex.split(providers['claudeAgent']['config']['launchArgs'])
     addition = Path(args[args.index('--append-system-prompt-file') + 1]).read_text()
@@ -47,13 +44,12 @@ def validate(home, expected_opencode_addition):
     relative = '.t3/userdata/instructions/opencode.md'
     assert len(listed) == 1 and listed[0].endswith('/' + relative), listed
     assert (home / relative).read_text() == expected_opencode_addition
-    assert 'omp' not in providers and settings['unrelated'] == {'keep': True}
+    assert settings['unrelated'] == {'keep': True}
     assert providers['custom-grok'] == {'driver': 'grok', 'enabled': False}
     assert settings['defaultModelSelection'] == {'instanceId': 'claudeAgent', 'model': 'claude-opus-5-5', 'options': [{'id': 'effort', 'value': 'medium'}]}
     assert settings['fallbackModelSelection'] == {'instanceId': 'pi', 'model': 'synthetic/hf:zai-org/GLM-5.3-Flash', 'options': [{'id': 'thinking', 'value': 'high'}]}
     assert settings['defaultThreadEnvMode'] == 'worktree'
     client = json.loads((home / '.t3/userdata/client-settings.json').read_text())
-    assert 'codex' not in client.get('providerModelPreferences', {}), 'retired Codex model preference still exists'
     assert client['providerModelPreferences']['pi']['hiddenModels'] == [
         'user-hidden', 'default', 'synthetic/infinite:small:vision',
         'synthetic/syn:large:text', 'synthetic/syn:large:vision',
@@ -70,97 +66,21 @@ def run_activation(entry, home, check=True):
                           env=env, check=check, capture_output=not check, text=True)
 
 
-def exercise_retirement(entry):
-    with tempfile.TemporaryDirectory() as scratch:
-        home = Path(scratch)
-        settings = home / '.t3/userdata/settings.json'
-        settings.parent.mkdir(parents=True)
-        settings.write_text(' \n')
-        run_activation(entry, home)
-        providers = json.loads(settings.read_text())['providerInstances']
-        assert 'antigravity' not in providers, 'fresh settings declare an Antigravity provider'
-        assert not (settings.parent / 'instructions/antigravity.md').exists()
-        assert not (home / '.gemini/antigravity-acp').exists()
-
-        older_binary = '/nix/store/' + 'a' * 32 + '-antigravity-acp-1.4.5/libexec/antigravity-acp/agy_acp_server.par'
-        profile_binary = str(Path(entry['profile']) / 'bin/agy_acp_server.par')
-        owned = {'name': 'ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE',
-                 'value': str(Path(entry['home']) / '.t3/userdata/instructions/antigravity.md'),
-                 'sensitive': False}
-        kept = {'name': 'KEEP', 'value': 'user'}
-        shared_file = {'name': 'OWNER_PROMPT_FILE', 'value': owned['value']}
-        custom_prompt = {'name': owned['name'], 'value': '/owner/custom/prompt'}
-        custom = {'driver': 'antigravity', 'enabled': True,
-                  'config': {'binaryPath': '/owner/custom/runtime'}}
-        account = home / '.gemini/antigravity-acp'
-        account.mkdir(parents=True)
-        token = account / 'acp_token.json'
-        token.write_text('fake-token')
-        for binary in (profile_binary, older_binary):
-            # Force the later instruction composer to fail after retirement.
-            settings.write_text(json.dumps({'providerInstances': {
-                'claudeAgent': {'config': {'launchArgs': '--append-system-prompt-file /missing/append.md'}},
-                'antigravity': {'driver': 'antigravity', 'enabled': True,
-                                'config': {'binaryPath': binary, 'enabled': True},
-                                'environment': [kept, owned, shared_file, custom_prompt], 'custom': True},
-                'owner-antigravity': custom,
-            }}))
-            failure = run_activation(entry, home, check=False)
-            assert failure.returncode and 'T3 instruction reconciliation failed' in failure.stderr, failure
-            document = json.loads(settings.read_text())
-            providers = document['providerInstances']
-            assert providers['antigravity'] == {
-                'driver': 'antigravity', 'enabled': False, 'config': {'enabled': True},
-                'environment': [kept, shared_file, custom_prompt], 'custom': True,
-            }
-            assert providers['owner-antigravity'] == custom
-            assert token.read_text() == 'fake-token'
-            providers['claudeAgent']['config'].pop('launchArgs')
-            settings.write_text(json.dumps(document))
-            run_activation(entry, home)
-            assert json.loads(settings.read_text())['providerInstances']['antigravity'] == providers['antigravity']
-
-        custom_registry = {'driver': 'acpRegistry', 'enabled': True, 'config': {'commandPath': '/owner/custom/adapter'},
-                           'environment': [shared_file]}
-        for instance in (custom, custom_registry):
-            settings.write_text(json.dumps({'providerInstances': {'antigravity': instance}}))
-            run_activation(entry, home)
-            assert json.loads(settings.read_text())['providerInstances']['antigravity'] == instance
-        legacy_path = Path(entry['home']) / '.local/share/dotfiles/antigravity-acp/bin/antigravity-acp'
-        legacy = {'driver': 'acpRegistry', 'enabled': True,
-                  'config': {'commandPath': str(legacy_path), 'launchArgs': '--user-arg'},
-                  'environment': [shared_file]}
-        settings.write_text(json.dumps({'providerInstances': {'antigravity': legacy}}))
-        legacy['enabled'] = False
-        del legacy['config']['commandPath']
-        for _ in range(2):
-            run_activation(entry, home)
-            assert json.loads(settings.read_text())['providerInstances']['antigravity'] == legacy
-
-
 def main():
     manifest = json.loads(Path(sys.argv[1]).read_text())
     for entry in manifest:
-        exercise_retirement(entry)
         with tempfile.TemporaryDirectory() as scratch:
             home = Path(scratch)
             settings = home / '.t3/userdata/settings.json'
             settings.parent.mkdir(parents=True)
             settings.write_text(json.dumps({
                 'unrelated': {'keep': True},
-                'providers': {'grok': {'enabled': True}, 'codex': {'enabled': True}},
                 'providerInstances': {
-                    'omp': {'enabled': True},
-                    'grok': {'driver': 'grok', 'enabled': True,
-                             'config': {'binaryPath': '/old/t3-grok-instructions'},
-                             'environment': [{'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1'}]},
-                    'codex': {'driver': 'codex', 'enabled': True, 'config': {'homePath': '~/.codex'}},
                     'custom-grok': {'driver': 'grok', 'enabled': False},
                 },
             }))
             (settings.parent / 'client-settings.json').write_text(json.dumps({'providerModelPreferences': {
                 'pi': {'hiddenModels': ['user-hidden']},
-                'codex': {'hiddenModels': ['gpt-6-luna']},
             }}))
             context = home / 'context.json'
             context.write_text(json.dumps({'kind': 'darwin', 'locale': {'name': 'C.UTF-8', 'language': 'en'}}))

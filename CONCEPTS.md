@@ -83,3 +83,7 @@ A trait need not be set by the host: the shared profile may default it from othe
 **Model source** — the selected provider models the repository names for startup defaults and model-watch comparisons, including each model's identity, lineage, and requested effort. It controls those selections rather than the provider's complete model list; catalog snapshots supply that list. A runtime that discovers its subscription roster natively does not receive model definitions from this source.
 
 **Catalog snapshot** — the committed copy of a provider's complete model catalog from which managed API model definitions are selected. Selected metadata overrides matching runtime entries until a newer snapshot is applied. Applying a newer declaration removes locally added definitions from the managed common document while preserving authentication and conversation state.
+
+## Tool retirement
+
+**Spent entry** — a retired-cask, retiredKey, retiredPath, or one-time migration declaration whose removal step has already run on every host that could carry its target. Whether an entry is spent is a fact about host state, not repository state: a macOS host runs activation on every apply, while a NixOS host runs it only when a rebuild produces a new Home Manager generation (see Activation reassertion), so an entry a retirement adds is spent only after the carrying change has been applied on both kinds of host. A spent entry is safe to drop from its declaration and its checks because the mechanism that adds the next retirement's entry stays.

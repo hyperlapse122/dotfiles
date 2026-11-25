@@ -95,6 +95,29 @@
       }
     },
     {
+      "id": "hf:thinkingmachines/Inkling-2-Mini",
+      "display_name": "Inkling 2 Mini",
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "context_length": 1024000,
+      "max_output_length": 65536,
+      "pricing": {
+        "prompt": "$0.00000008",
+        "completion": "$0.0000004",
+        "input_cache_reads": "$0.00000002",
+        "input_cache_writes": "0"
+      },
+      "reasoning_parameters": {
+        "efforts": [
+          "low",
+          "medium",
+          "xhigh"
+        ]
+      }
+    },
+    {
       "id": "hf:zai-org/GLM-4.7-Flash",
       "display_name": "GLM 4.7 Flash",
       "input_modalities": [
