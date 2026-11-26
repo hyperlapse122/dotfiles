@@ -19,6 +19,7 @@ in
         touch "$out"
       '';
   agent-hooks = import ./agent-hooks.nix { inherit pkgs; };
+  flake-inputs = import ./flake-inputs.nix { inherit pkgs self; };
   project-skills =
     let
       module = import ../home/h82/agents/tanstack-intent.nix { inherit pkgs; };
