@@ -44,7 +44,7 @@ The shared `CROSS_MODEL_PEERS` list includes `claude` and `opencode` where those
 
 ## T3 task guidance
 
-The authoritative [T3 guide](../home/h82/agents/instructions/t3-guide.md) covers T3 delegation, PR and MR watching, multi-PR threads, and visual options. Home Manager installs it at `~/.local/share/nix-config/agent-instructions/t3-guide.md` for use outside this checkout. The [task guide](../home/h82/agents/instructions/task-guide.md) covers personal procedures and is installed beside it. The reset templates do not reference either guide automatically; open them manually or from future instructions.
+The authoritative [T3 guide](../home/h82/agents/instructions/t3-guide.md) covers T3 delegation, PR and MR watching, multi-PR threads, and visual options. The [task guide](../home/h82/agents/instructions/task-guide.md) covers personal procedures. Both live only in this checkout; activation removes the copies earlier Home Manager generations installed at `~/.local/share/nix-config/agent-instructions/` and leaves unrelated files there in place. The reset templates do not reference either guide automatically; open them manually or from future instructions.
 
 ## Native T3 launches
 
