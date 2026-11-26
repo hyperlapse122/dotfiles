@@ -599,6 +599,19 @@ let
         && grep -qx "variant=$variant" "$sys/etc/nix-config-host" \
         || bad "/etc/nix-config-host does not record the host and variant"
 
+      brewenv=$sys/etc/homebrew/brew.env
+      if [ ! -f "$brewenv" ]; then
+        bad "managed Homebrew needs brew.env to replace nix-homebrew's non-Git update revisions"
+      else
+        before=$(grep '^HOMEBREW_UPDATE_BEFORE=' "$brewenv" | cut -d= -f2-)
+        after=$(grep '^HOMEBREW_UPDATE_AFTER=' "$brewenv" | cut -d= -f2-)
+        if ! [[ "$before" =~ ^[[:xdigit:]]{40}([[:xdigit:]]{24})?$ ]] \
+          || ! [[ "$after" =~ ^[[:xdigit:]]{40}([[:xdigit:]]{24})?$ ]] \
+          || [ "$before" != "$after" ]; then
+          bad "managed Homebrew update revisions must be equal hexadecimal Git object IDs"
+        fi
+      fi
+
       brewfile=$(grep -o -m1 "/nix/store/[a-z0-9]*-Brewfile" "$sys/activate" || true)
       if [ -z "$brewfile" ]; then
         bad "the system activation runs no brew bundle"

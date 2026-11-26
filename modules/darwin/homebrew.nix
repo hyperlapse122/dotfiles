@@ -12,6 +12,15 @@ let
   };
 in
 {
+  # nix-homebrew launches brew with "nix" as both core update revisions, but
+  # Homebrew now requires hexadecimal object IDs before reporting tap updates.
+  # brew.env loads after those defaults; equal zero IDs retain no-core-update
+  # semantics while satisfying the guard.
+  environment.etc."homebrew/brew.env".text = ''
+    HOMEBREW_UPDATE_BEFORE=0000000000000000000000000000000000000000
+    HOMEBREW_UPDATE_AFTER=0000000000000000000000000000000000000000
+  '';
+
   # nix-homebrew installs Homebrew itself on the first apply, so a new Mac
   # needs only Nix installed by hand. Taps stay mutable: an immutable tap set
   # turns off Homebrew's auto-update for every brew call.
