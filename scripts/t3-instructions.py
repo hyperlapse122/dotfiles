@@ -178,7 +178,6 @@ def apply(destination, hidden_models=()):
                     config['launchArgs'] = join_args(cleaned)
                 else:
                     config.pop('launchArgs', None)
-                provider['config'] = config
                 changed = True
             continue
         current = config.get('launchArgs', '')
