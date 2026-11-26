@@ -9,7 +9,9 @@ import sys
 import tempfile
 
 DELIVERIES = {'claude': '.claude/CLAUDE.md',
-              'pi': '.pi/agent/AGENTS.md', 'opencode': '.config/opencode/AGENTS.md'}
+              'pi': '.pi/agent/AGENTS.md', 'opencode': '.config/opencode/AGENTS.md',
+              'omp': '.omp/agent/AGENTS.md'}
+T3_HARNESSES = ('claude', 'pi', 'opencode')
 
 
 TASK_GUIDE = 'task-guide.md'
@@ -83,11 +85,12 @@ def exercise(template, helper, renderer, kind, receipts):
         render()
         for harness in DELIVERIES:
             text = body(root, harness)
+            assert 'Branch probe' in text
             assert harness + '-only' in text
             assert all(other + '-only' not in text for other in DELIVERIES if other != harness)
         source.write_text(template)
-        for harness in (None, 'claude', 'pi', 'opencode'):
-            context.write_text(json.dumps({'t3': True, **{name: name == harness for name in DELIVERIES}}))
+        for harness in (None, *T3_HARNESSES):
+            context.write_text(json.dumps({'t3': True, **{name: name == harness for name in T3_HARNESSES}}))
             t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
             assert t3 == ''
             check_receipt(t3, receipts, 't3', harness)
@@ -107,6 +110,7 @@ def main():
     for kind in ('nixos', 'darwin'):
         exercise(template, helper, renderer, kind, receipts)
     for entry in json.loads(Path(sys.argv[2]).read_text()):
+        assert set(entry['delivery_paths']) == set(DELIVERIES.values()), entry['name']
         assert entry['key'] in Path(entry['git']).read_text(), entry['name']
         cleanup = entry['cleanup']
         assert cleanup, f"{entry['name']}: missing legacyInstructionGuides"
@@ -148,6 +152,27 @@ def main():
             run(cleanup)
             assert os.readlink(guides / 'task-guide.md') == str(sources['task-guide.md'])
             assert (guides / 't3-guide.md').read_text() == 'personal copy\n'
+
+            sentinel = home / 'omp-agents-sentinel'
+            sentinel.write_text('sentinel instructions\n')
+            omp_destination = home / DELIVERIES['omp']
+            omp_destination.parent.mkdir(parents=True, exist_ok=True)
+            omp_destination.symlink_to(sentinel)
+            omp_state = {
+                home / '.omp/agent/config.yml': b'omp settings\n',
+                home / '.omp/agent/sessions/newer.jsonl': b'{"session": true}\n',
+                home / '.omp/agent/agent.db': b'not a credential store\n',
+            }
+            for path, content in omp_state.items():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+            run(entry['activation'])
+            assert not omp_destination.is_symlink()
+            assert omp_destination.is_file()
+            assert omp_destination.read_bytes() == b''
+            assert sentinel.read_text() == 'sentinel instructions\n'
+            for path, content in omp_state.items():
+                assert path.read_bytes() == content, path
 
             for delivery in DELIVERIES.values():
                 destination = home / delivery
