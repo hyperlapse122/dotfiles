@@ -40,13 +40,17 @@ let
     ''}
     ${command} --home "$HOME"
   '';
+  legacyGuideDirectory = ".local/share/nix-config/agent-instructions";
+  legacyGuides = [
+    "${legacyGuideDirectory}/task-guide.md"
+    "${legacyGuideDirectory}/t3-guide.md"
+  ];
+  homeManagerFilePattern = "${builtins.storeDir}/*-home-manager-files/*";
 
 in
 {
   home.file = {
     ".local/share/nix-config/refresh-agent-instructions".source = refresh;
-    ".local/share/nix-config/agent-instructions/task-guide.md".source = ./task-guide.md;
-    ".local/share/nix-config/agent-instructions/t3-guide.md".source = ./t3-guide.md;
   };
 
   home.activation.agentInstructions = (
@@ -58,4 +62,15 @@ in
         fi
       ''
   );
+
+  home.activation.legacyInstructionGuides = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+    if [[ ! -v DRY_RUN ]]; then
+      ${lib.concatMapStrings (path: ''
+        if [[ -L "$HOME/${path}" && "$(readlink "$HOME/${path}")" == ${homeManagerFilePattern} ]]; then
+          rm -f "$HOME/${path}"
+        fi
+      '') legacyGuides}
+      rmdir "$HOME/${legacyGuideDirectory}" 2>/dev/null || :
+    fi
+  '';
 }
