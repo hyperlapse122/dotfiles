@@ -30,6 +30,19 @@ login_registration() {
         fail 'Cannot identify container login registration; check `brew services info container --json`.'
 }
 
+if [ -z "${HOMEBREW_PREFIX:-}" ]; then
+    fail 'HOMEBREW_PREFIX is required to locate the bundled container plugins.'
+fi
+plugin_dir="$HOMEBREW_PREFIX/libexec/container/plugins"
+if [ ! -d "$plugin_dir" ]; then
+    # A formula whose post-install failed is already current, so brew bundle
+    # will not retry it. Repair the plugins before a status call can block.
+    brew postinstall container ||
+        fail 'Cannot restore bundled container plugins with `brew postinstall container`.'
+    [ -d "$plugin_dir" ] ||
+        fail 'Container post-install completed without installing bundled plugins.'
+fi
+
 container_runtime_state
 login_registration
 pending="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/container-kernel-pending"

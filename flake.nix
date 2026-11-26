@@ -26,7 +26,10 @@
     };
     # Installs Homebrew itself on a macOS host, so the first apply needs no
     # manual Homebrew install; nix-darwin's homebrew module installs the casks.
-    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
+    nix-homebrew = {
+      url = "github:zhaofengli/nix-homebrew";
+      inputs.brew-src.url = "github:Homebrew/brew/main";
+    };
     # Supplies the Home Manager module (home/h82/agents/omp.nix), which owns
     # ~/.omp/agent/config.yml; the CLI itself is the release binary pinned in
     # packages/omp-release.json. The URL names that release's tag, so a relock

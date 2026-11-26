@@ -29,7 +29,8 @@ class Provisioning(unittest.TestCase):
         self.bin.mkdir()
         self.log = self.root / 'log'
         self.env = os.environ | {'PATH': str(self.bin) + ':' + os.environ['PATH'],
-                                 'HOME': str(self.root), 'LOG': str(self.log)}
+                                 'HOME': str(self.root), 'LOG': str(self.log),
+                                 'HOMEBREW_PREFIX': str(self.root / 'homebrew')}
 
     def stub(self, name, body):
         p = self.bin / name
@@ -160,33 +161,40 @@ a=sys.argv[1:]
 with open(os.environ['LOG'], 'a') as f: f.write('brew '+ ' '.join(a)+' SUDO_USER=' + ('set' if 'SUDO_USER' in os.environ else 'unset') + '\\n')
 if a == ['services','info','container','--json']: print(json.dumps([{'name':'container','registered':p.exists()}]))
 elif a == ['services','start','container']: p.touch()
+elif a == ['postinstall','container']: (Path(os.environ['HOMEBREW_PREFIX'])/'libexec/container/plugins').mkdir(parents=True, exist_ok=True)
 else: sys.exit(11)
 ''')
-        for gui in (True, False):
-            for registered in (False, True):
-                for running in (False, True):
-                    with self.subTest(gui=gui, registered=registered, running=running):
-                        for name, present in [('registered', registered), ('running', running)]:
-                            path = self.root / name
-                            path.unlink(missing_ok=True)
-                            if present: path.touch()
-                        self.log.write_text('')
-                        env = self.env | {'SUDO_USER': 'invoker', 'GUI_PRESENT': str(int(gui))}
-                        result = subprocess.run(['sh', str(script)], env=env, capture_output=True)
-                        self.assertEqual(result.returncode, 0, result.stderr)
-                        log = self.log.read_text().splitlines()
-                        marker = 'unset' if gui else 'set'
-                        expected = [f'launchctl print gui/{os.getuid()}',
-                                    'container system status --format json',
-                                    f'brew services info container --json SUDO_USER={marker}']
-                        if not running:
-                            expected += ['container system start --disable-kernel-install',
-                                         'container system kernel set --recommended --force']
-                        if not registered:
-                            expected += [f'brew services start container SUDO_USER={marker}',
+        for plugins_installed in (False, True):
+            for gui in (True, False):
+                for registered in (False, True):
+                    for running in (False, True):
+                        with self.subTest(plugins_installed=plugins_installed, gui=gui, registered=registered, running=running):
+                            plugin_dir = Path(self.env['HOMEBREW_PREFIX'])/'libexec/container/plugins'
+                            if plugins_installed: plugin_dir.mkdir(parents=True, exist_ok=True)
+                            else: shutil.rmtree(plugin_dir.parent, ignore_errors=True)
+                            for name, present in [('registered', registered), ('running', running)]:
+                                path = self.root / name
+                                path.unlink(missing_ok=True)
+                                if present: path.touch()
+                            self.log.write_text('')
+                            env = self.env | {'SUDO_USER': 'invoker', 'GUI_PRESENT': str(int(gui))}
+                            result = subprocess.run(['sh', str(script)], env=env, capture_output=True)
+                            self.assertEqual(result.returncode, 0, result.stderr)
+                            log = self.log.read_text().splitlines()
+                            marker = 'unset' if gui else 'set'
+                            expected = [f'launchctl print gui/{os.getuid()}']
+                            if not plugins_installed:
+                                expected += ['brew postinstall container SUDO_USER=set']
+                            expected += ['container system status --format json',
                                          f'brew services info container --json SUDO_USER={marker}']
-                        expected += ['container system status --format json']
-                        self.assertEqual(log, expected)
+                            if not running:
+                                expected += ['container system start --disable-kernel-install',
+                                             'container system kernel set --recommended --force']
+                            if not registered:
+                                expected += [f'brew services start container SUDO_USER={marker}',
+                                             f'brew services info container --json SUDO_USER={marker}']
+                            expected += ['container system status --format json']
+                            self.assertEqual(log, expected)
 
     @unittest.skipUnless(ACTIVATIONS, 'activation declarations supplied by darwin-config')
     def test_activation_calls(self):
@@ -201,7 +209,7 @@ else: sys.exit(11)
 with open(os.environ['LOG'], 'a') as log:
     print(json.dumps({'args': sys.argv[1:], 'ca': os.environ.get('SSL_CERT_FILE')}), file=log)
 ''')
-            self.stub('container-setup', "import os\nopen(os.environ['LOG'],'a').write('container-setup\\n')")
+            self.stub('container-setup', "import os\nassert os.environ['HOMEBREW_PREFIX'] == os.environ.pop('EXPECTED_HOMEBREW_PREFIX')\nopen(os.environ['LOG'],'a').write('container-setup\\n')")
             self.stub('launchctl', "import os, sys\na=sys.argv[1:]\nassert a[:2] == ['asuser', '501']\nopen(os.environ['LOG'],'a').write('launchctl asuser 501\\n')\nos.execvpe(a[2], a[2:], os.environ)")
             self.stub('id', "import os, sys\nassert sys.argv[1:] == ['-u', '--', os.environ['EXPECTED_OWNER']]\nprint('501')")
             lines = entry['text'].splitlines()
@@ -226,7 +234,8 @@ with open(os.environ['LOG'], 'a') as log:
             script=re.sub(r'/nix/store/[^ /]+/bin/macos-xcode', 'macos-xcode', script)
             script=re.sub(r'/bin/sh /nix/store/[^ /]+/macos-container.sh', 'container-setup', script)
             script=re.sub(r'PATH="[^"]+"', 'PATH="'+self.env['PATH']+'"', script)
-            env = self.env | {'EXPECTED_OWNER': entry['owner']}
+            env = self.env | {'EXPECTED_OWNER': entry['owner'],
+                              'EXPECTED_HOMEBREW_PREFIX': entry['homebrewPrefix']}
             env.pop('SSL_CERT_FILE', None)
             result=subprocess.run(['bash','-euc',script],env=env,capture_output=True,cwd='/')
             self.assertEqual(result.returncode,0,result.stderr)

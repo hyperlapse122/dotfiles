@@ -620,6 +620,8 @@ let
       # point that still runs as root; xcodes runs as the primary user.
       lineof() { grep -nF -m1 -- "$1" "$sys/activate" | cut -d: -f1 || true; }
       bundleline=$(lineof "brew bundle --file="); bundleline=''${bundleline:-0}
+      setupline=$(lineof "$setup"); setupline=''${setupline:-0}
+      libexecdirline=$(lineof ${lib.escapeShellArg "/usr/bin/install -d -o ${config.my.user.name} -g admin -m 0755 ${config.homebrew.prefix}/libexec ${config.homebrew.prefix}/libexec/container-plugins"}); libexecdirline=''${libexecdirline:-0}
       installline=$(lineof '/bin/macos-xcode'); installline=''${installline:-0}
       kakaomasline=$(lineof ${lib.escapeShellArg ''/bin/launchctl asuser "$appStoreUid" /usr/bin/env SUDO_UID="$appStoreUid" SUDO_GID="$appStoreGid" ${masExe} "$@"''}); kakaomasline=''${kakaomasline:-0}
       kakaoline=$(lineof 'if ! appStoreMas install 869223134 && ! appStoreMas get 869223134; then'); kakaoline=''${kakaoline:-0}
@@ -627,6 +629,9 @@ let
       hmline=$(lineof "echo Activating home-manager configuration for "); hmline=''${hmline:-0}
       if [ "$bundleline" = 0 ] || [ "$hmline" = 0 ]; then
         bad "the system activation has no brew bundle or Home Manager activation call"
+      fi
+      if [ "$setupline" = 0 ] || [ "$libexecdirline" = 0 ] || [ "$libexecdirline" -le "$setupline" ] || [ "$libexecdirline" -ge "$bundleline" ]; then
+        bad "Homebrew must own writable libexec directories after prefix setup and before container post-install can run"
       fi
       if [ "$production" = 1 ]; then
         [ "$installline" -gt "$bundleline" ] && [ "$installline" -lt "$hmline" ] || bad "Xcode ordering is wrong"

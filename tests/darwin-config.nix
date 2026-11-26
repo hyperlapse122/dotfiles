@@ -14,6 +14,13 @@ let
 
   check = condition: message: lib.optionalString (!condition) (fail message);
 
+  flakeLock = builtins.fromJSON (builtins.readFile ../flake.lock);
+  brewSource = flakeLock.nodes."brew-src" or { };
+  brewRef = brewSource.original.ref or "";
+  brewInstaller = builtins.readFile (
+    self.inputs.nix-homebrew.inputs.brew-src + "/Library/Homebrew/formula_installer.rb"
+  );
+
   plain = builtins.unsafeDiscardStringContext;
 
   # lib.hasInfix matches ".*<infix>.*", and on Linux Nix's regex engine
@@ -21,6 +28,14 @@ let
   # activation script, Dock plists included, overflows the evaluator's stack.
   # Search one line at a time for an infix that holds no newline.
   hasInfixInLines = infix: text: lib.any (lib.hasInfix infix) (lib.splitString "\n" text);
+
+  assertHomebrew = lib.concatStrings [
+    (check (brewRef == "main") "brew-src must track Homebrew main for scheduled flake updates")
+    (check (
+      hasInfixInLines ''libexec = HOMEBREW_PREFIX/"libexec"'' brewInstaller
+      && hasInfixInLines "sandbox.allow_write_path libexec" brewInstaller
+    ) "Locked Homebrew cannot create and write HOMEBREW_PREFIX/libexec during post-install")
+  ];
 
   # A store path's hash or name can spell "zap" by chance, so the zap check
   # reads the whole activation script with every store path replaced by a
@@ -1172,6 +1187,7 @@ pkgs.runCommand "darwin-config"
             tlsInspection = entry.host.config.my.tlsInspectionCa.enable;
             host = entry.host.config.my.hostName;
             home = entry.host.config.my.user.home;
+            homebrewPrefix = entry.host.config.homebrew.prefix;
             owner = entry.host.config.my.user.name;
             source = if entry.bootstrap then null else plain "${entry.host.config.my.xcode.appleAccountFile}";
             text = plain entry.host.config.system.activationScripts.postActivation.text;
@@ -1184,6 +1200,7 @@ pkgs.runCommand "darwin-config"
       fail "tests/fixtures/hosts holds no macOS fixture host"
     )}
     ${assertDiscovery}
+    ${assertHomebrew}
     ${assertNoDevicesElsewhere}
     ${assertZapFilter}
     ${assertMapping}
