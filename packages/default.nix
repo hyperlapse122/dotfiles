@@ -7,6 +7,7 @@ in
   agent-browser = import ./agent-browser.nix { inherit pkgs; };
   ctx7 = import ./ctx7.nix { inherit pkgs; };
   decide = import ./decide.nix { inherit pkgs; };
+  flake-inputs = import ./flake-inputs.nix { inherit pkgs; };
   impeccable = import ./impeccable.nix { inherit pkgs inputs; };
   omp = import ./omp.nix { inherit pkgs; };
 }

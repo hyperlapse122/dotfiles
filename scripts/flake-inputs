@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+"""Render the flake input registry into flake.nix.
+
+Nix requires a flake's `inputs` to be a literal attribute set, so the registry
+cannot be read at evaluation time. This tool owns the one generated span
+between the marker comments in flake.nix.
+
+Usage:
+  flake-inputs generate (--write | --check) [--registry PATH] [--flake PATH]
+  flake-inputs set NAME (--ref REF | --rev REV) [--registry PATH]
+
+`--check` fails when the span is stale, when the markers are missing or
+duplicated, or when an external reference appears outside the span.
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+import tempfile
+
+BEGIN_MARKER = "# BEGIN flake-inputs (generated from flake-inputs.json; do not edit)"
+END_MARKER = "# END flake-inputs"
+
+ALLOWED_ENTRY_KEYS = {"repo", "ref", "rev", "flake", "note", "inputs", "follows"}
+REPO_TYPES = ("github:", "gitlab:", "sourcehut:")
+IDENTIFIER = re.compile(r"^[A-Za-z0-9._-]+$")
+FOLLOWS_PATH = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
+COMMIT = re.compile(r"^[0-9a-f]{40}$")
+REPO_REFERENCE = re.compile(r"^(?:github|gitlab|sourcehut):[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
+EXTERNAL_LITERAL = re.compile(r"github:|gitlab:|sourcehut:|git\+|tarball\+|https?://")
+
+
+class RegistryError(Exception):
+    """A registry, span, or drift problem reported to the caller."""
+
+
+def fail(message):
+    raise RegistryError(message)
+
+
+def load_json(path):
+    def reject_duplicates(pairs):
+        seen = {}
+        for key, value in pairs:
+            if key in seen:
+                fail(f"{path}: duplicate key {key!r}")
+            seen[key] = value
+        return seen
+
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle, object_pairs_hook=reject_duplicates)
+    except OSError as error:
+        fail(f"{path}: {error.strerror}")
+    except json.JSONDecodeError as error:
+        fail(f"{path}: invalid JSON at line {error.lineno}: {error.msg}")
+
+
+def non_empty_string(value, where):
+    if not isinstance(value, str) or not value.strip():
+        fail(f"{where}: expected a non-empty string")
+    if "\n" in value or "\r" in value:
+        fail(f"{where}: expected a single-line string")
+    return value
+
+
+def validate_entry(entry, where):
+    if not isinstance(entry, dict):
+        fail(f"{where}: expected an object")
+    unknown = sorted(set(entry) - ALLOWED_ENTRY_KEYS)
+    if unknown:
+        fail(f"{where}: unknown key(s) {', '.join(unknown)}")
+    has_repo = "repo" in entry
+    has_follows = "follows" in entry
+    if has_repo == has_follows:
+        fail(f"{where}: entry needs exactly one of 'repo' or 'follows'")
+    if has_follows:
+        if set(entry) != {"follows"}:
+            fail(f"{where}: a follows entry takes no other keys")
+        target = non_empty_string(entry["follows"], f"{where}.follows")
+        if not FOLLOWS_PATH.match(target):
+            fail(f"{where}.follows: {target!r} is not an input path")
+        return
+    repo = non_empty_string(entry["repo"], f"{where}.repo")
+    if not repo.startswith(REPO_TYPES):
+        fail(f"{where}.repo: {repo!r} must start with one of {', '.join(REPO_TYPES)}")
+    if not REPO_REFERENCE.match(repo):
+        fail(f"{where}.repo: {repo!r} must name a repository without a ref or rev segment")
+    if "ref" in entry and "rev" in entry:
+        fail(f"{where}: 'ref' and 'rev' are exclusive")
+    if "ref" in entry:
+        ref = non_empty_string(entry["ref"], f"{where}.ref")
+        if ref.startswith("-"):
+            fail(f"{where}.ref: {ref!r} may not start with a dash")
+    if "rev" in entry:
+        rev = non_empty_string(entry["rev"], f"{where}.rev")
+        if not COMMIT.match(rev):
+            fail(f"{where}.rev: {rev!r} is not a 40-character lowercase commit")
+    if "flake" in entry and not isinstance(entry["flake"], bool):
+        fail(f"{where}.flake: expected true or false")
+    if "note" in entry:
+        notes = entry["note"]
+        if not isinstance(notes, list) or not notes:
+            fail(f"{where}.note: expected a non-empty list of lines")
+        for index, line in enumerate(notes):
+            non_empty_string(line, f"{where}.note[{index}]")
+    if "inputs" in entry:
+        children = entry["inputs"]
+        if not isinstance(children, dict) or not children:
+            fail(f"{where}.inputs: expected a non-empty object")
+        for name, child in children.items():
+            if not IDENTIFIER.match(name):
+                fail(f"{where}.inputs: {name!r} is not an input name")
+            validate_entry(child, f"{where}.inputs.{name}")
+
+
+def load_registry(path):
+    data = load_json(path)
+    if not isinstance(data, dict):
+        fail(f"{path}: expected an object")
+    unknown = sorted(set(data) - {"version", "inputs"})
+    if unknown:
+        fail(f"{path}: unknown key(s) {', '.join(unknown)}")
+    if data.get("version") != 1:
+        fail(f"{path}: version must be 1")
+    inputs = data.get("inputs")
+    if not isinstance(inputs, dict) or not inputs:
+        fail(f"{path}: inputs must be a non-empty object")
+    for name, entry in inputs.items():
+        if not IDENTIFIER.match(name):
+            fail(f"{path}: {name!r} is not an input name")
+        validate_entry(entry, name)
+    return data
+
+
+def string_literal(value, where):
+    return json.dumps(non_empty_string(value, where), ensure_ascii=False)
+
+
+def reference(entry):
+    url = entry["repo"]
+    if "ref" in entry:
+        return f"{url}/{entry['ref']}"
+    if "rev" in entry:
+        return f"{url}/{entry['rev']}"
+    return url
+
+
+def render_body(entry, prefix, indent, out, where):
+    pad = " " * indent
+    for line in entry.get("note", []):
+        out.append(f"{pad}# {line}")
+    out.append(f"{pad}{prefix}url = {string_literal(reference(entry), where + '.url')};")
+    if entry.get("flake") is False:
+        out.append(f"{pad}{prefix}flake = false;")
+    for name, child in entry.get("inputs", {}).items():
+        child_prefix = f"{prefix}inputs.{name}."
+        child_where = f"{where}.inputs.{name}"
+        if "follows" in child:
+            target = string_literal(child["follows"], child_where + ".follows")
+            out.append(f"{pad}{child_prefix}follows = {target};")
+        else:
+            render_body(child, child_prefix, indent, out, child_where)
+
+
+def render_span(registry):
+    out = ["  inputs = {"]
+    for name, entry in registry["inputs"].items():
+        path = f"inputs.{name}"
+        if "follows" in entry:
+            target = string_literal(entry["follows"], path + ".follows")
+            out.append(f"    {path}.follows = {target};")
+            continue
+        out.append(f"    {name} = {{")
+        render_body(entry, "", 6, out, name)
+        out.append("    };")
+    out.append("  };")
+    return "\n".join(out) + "\n"
+
+
+def split_span(text, path):
+    lines = text.splitlines(keepends=True)
+    begins = [index for index, line in enumerate(lines) if line.strip() == BEGIN_MARKER]
+    ends = [index for index, line in enumerate(lines) if line.strip() == END_MARKER]
+    if len(begins) != 1 or len(ends) != 1:
+        fail(f"{path}: expected exactly one '{BEGIN_MARKER}' and one '{END_MARKER}'")
+    begin, end = begins[0], ends[0]
+    if begin >= end:
+        fail(f"{path}: the BEGIN marker must come before the END marker")
+    return lines, begin, end
+
+
+def check_external_literals(outside, path):
+    for line in outside:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if EXTERNAL_LITERAL.search(line):
+            fail(f"{path}: external reference outside the generated span: {stripped}")
+
+
+def write_atomic(path, content):
+    directory = os.path.dirname(os.path.abspath(path))
+    handle, temporary = tempfile.mkstemp(prefix=".flake-inputs-", dir=directory)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(content)
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+
+
+def command_generate(args):
+    registry = load_registry(args.registry)
+    span = render_span(registry)
+    try:
+        with open(args.flake, "r", encoding="utf-8") as handle:
+            text = handle.read()
+    except OSError as error:
+        fail(f"{args.flake}: {error.strerror}")
+    lines, begin, end = split_span(text, args.flake)
+    check_external_literals(lines[: begin + 1] + lines[end:], args.flake)
+    current = "".join(lines[begin + 1 : end])
+    if args.check:
+        if current != span:
+            fail(f"{args.flake}: the generated input span is stale; run flake-inputs generate --write")
+        return 0
+    if current == span:
+        return 0
+    write_atomic(args.flake, "".join(lines[: begin + 1]) + span + "".join(lines[end:]))
+    return 0
+
+
+def command_set(args):
+    registry = load_registry(args.registry)
+    entry = registry["inputs"].get(args.name)
+    if entry is None:
+        fail(f"{args.registry}: no input named {args.name!r}")
+    if "repo" not in entry:
+        fail(f"{args.registry}: input {args.name!r} has no repository to point")
+    if args.ref is not None:
+        entry.pop("rev", None)
+        entry["ref"] = args.ref
+    else:
+        entry.pop("ref", None)
+        entry["rev"] = args.rev
+    validate_entry(entry, args.name)
+    write_atomic(args.registry, json.dumps(registry, indent=2, ensure_ascii=False) + "\n")
+    return 0
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(prog="flake-inputs", description=__doc__.splitlines()[0])
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    generate = subparsers.add_parser("generate", help="render or verify the flake input span")
+    mode = generate.add_mutually_exclusive_group()
+    mode.add_argument("--write", action="store_true", help="rewrite the span (default)")
+    mode.add_argument("--check", action="store_true", help="fail when the span is stale")
+    generate.add_argument("--registry", default="flake-inputs.json", help="registry path")
+    generate.add_argument("--flake", default="flake.nix", help="flake.nix path")
+    generate.set_defaults(handler=command_generate)
+
+    setter = subparsers.add_parser("set", help="point one input at a new ref or revision")
+    setter.add_argument("name")
+    value = setter.add_mutually_exclusive_group(required=True)
+    value.add_argument("--ref")
+    value.add_argument("--rev")
+    setter.add_argument("--registry", default="flake-inputs.json", help="registry path")
+    setter.set_defaults(handler=command_set)
+
+    args = parser.parse_args(argv)
+    try:
+        return args.handler(args)
+    except RegistryError as error:
+        print(f"flake-inputs: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

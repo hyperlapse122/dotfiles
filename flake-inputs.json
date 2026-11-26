@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "inputs": {
+    "nixpkgs": {
+      "repo": "github:NixOS/nixpkgs",
+      "ref": "nixos-unstable"
+    },
+    "home-manager": {
+      "repo": "github:nix-community/home-manager",
+      "inputs": {
+        "nixpkgs": {
+          "follows": "nixpkgs"
+        }
+      }
+    },
+    "disko": {
+      "repo": "github:nix-community/disko",
+      "inputs": {
+        "nixpkgs": {
+          "follows": "nixpkgs"
+        }
+      }
+    },
+    "lanzaboote": {
+      "repo": "github:nix-community/lanzaboote",
+      "ref": "v1.1.0",
+      "inputs": {
+        "nixpkgs": {
+          "follows": "nixpkgs"
+        }
+      }
+    },
+    "sops-nix": {
+      "repo": "github:Mic92/sops-nix",
+      "inputs": {
+        "nixpkgs": {
+          "follows": "nixpkgs"
+        }
+      }
+    },
+    "nix-darwin": {
+      "repo": "github:nix-darwin/nix-darwin",
+      "ref": "master",
+      "note": [
+        "Applies the system layer of a macOS host, with Home Manager inside it."
+      ],
+      "inputs": {
+        "nixpkgs": {
+          "follows": "nixpkgs"
+        }
+      }
+    },
+    "nix-homebrew": {
+      "repo": "github:zhaofengli/nix-homebrew",
+      "note": [
+        "Installs Homebrew itself on a macOS host, so the first apply needs no",
+        "manual Homebrew install; nix-darwin's homebrew module installs the casks."
+      ],
+      "inputs": {
+        "brew-src": {
+          "repo": "github:Homebrew/brew",
+          "ref": "main"
+        }
+      }
+    },
+    "omp": {
+      "repo": "github:can1357/oh-my-pi",
+      "ref": "v19.2.1",
+      "note": [
+        "Supplies the Home Manager module (home/h82/agents/omp.nix), which owns",
+        "~/.omp/agent/config.yml; the CLI itself is the release binary pinned in",
+        "packages/omp-release.json. The ref names that release's tag, so a relock",
+        "holds still until the update workflow moves the tag, and the omp check",
+        "fails when the locked revision differs from the pinned one."
+      ],
+      "inputs": {
+        "nixpkgs": {
+          "follows": "nixpkgs"
+        }
+      }
+    },
+    "compound-engineering-plugin": {
+      "repo": "github:EveryInc/compound-engineering-plugin",
+      "ref": "compound-engineering-v3.38.3",
+      "flake": false,
+      "note": [
+        "Pinned to a release tag rather than a branch. A tag is mutable and a",
+        "relock re-resolves the ref, so the tag alone is not a pin:",
+        "home/h82/agents/agent-plugin-pins.nix records the revision it must name,",
+        "and the agent-plugins check compares it with flake.lock."
+      ]
+    },
+    "korean-skills": {
+      "repo": "github:DaleSeo/korean-skills",
+      "ref": "v1.0.0",
+      "flake": false
+    },
+    "anthropic-skills": {
+      "repo": "github:anthropics/skills",
+      "rev": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "flake": false,
+      "note": [
+        "Published skills, installed unchanged. Each is pinned to a tag where",
+        "upstream has one and to a commit otherwise; home/h82/agents/pinned-skills-pin.nix",
+        "records the revision each must resolve to, and the pinned-skills check",
+        "compares it with flake.lock."
+      ]
+    },
+    "modern-web-guidance": {
+      "repo": "github:GoogleChrome/modern-web-guidance",
+      "ref": "v1.0.0",
+      "flake": false
+    },
+    "vercel-agent-skills": {
+      "repo": "github:vercel-labs/agent-skills",
+      "ref": "agent-skills-1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62",
+      "flake": false
+    },
+    "expo-skills": {
+      "repo": "github:expo/skills",
+      "rev": "8a0dc4fa57ae345923c357e1451cbcd8b6f2a7db",
+      "flake": false
+    },
+    "playwright-best-practices-skill": {
+      "repo": "github:currents-dev/playwright-best-practices-skill",
+      "rev": "283d5cbc5d11aac1abda058b16ad22c317d54dc0",
+      "flake": false
+    },
+    "ux-writing-skill": {
+      "repo": "github:content-designer/ux-writing-skill",
+      "ref": "v1.5.0",
+      "flake": false
+    },
+    "kergoth-dotfiles": {
+      "repo": "github:kergoth/dotfiles",
+      "rev": "7f61f919d27e3016b64c37ce09b7006199ad7878",
+      "flake": false
+    },
+    "caldo-skills": {
+      "repo": "github:caldoai/skills",
+      "rev": "d5b68dace378219890d821adb3685538e2c69b04",
+      "flake": false
+    },
+    "context7": {
+      "repo": "github:upstash/context7",
+      "rev": "c36522f3d4446288a272aedd727d665f7b8175f2",
+      "flake": false
+    },
+    "impeccable": {
+      "repo": "github:pbakaus/impeccable",
+      "ref": "skill-v4.8.0",
+      "flake": false
+    }
+  }
+}
