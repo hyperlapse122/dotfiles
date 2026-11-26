@@ -33,7 +33,7 @@
     # holds still until the update workflow moves the tag, and the omp check
     # fails when the locked revision differs from the pinned one.
     omp = {
-      url = "github:can1357/oh-my-pi/v19.1.1";
+      url = "github:can1357/oh-my-pi/v19.2.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Pinned to a release tag rather than a branch, and the registry in

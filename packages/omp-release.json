@@ -1,16 +1,16 @@
 {
-  "version": "19.1.1",
-  "rev": "31ffee513f27a01bba7d4dfbe12bae239cdc646a",
+  "version": "19.2.1",
+  "rev": "b55cd1bb664d8ab46ddc77f2a34eb47555dbf1ac",
   "platforms": {
     "x86_64-linux": {
       "asset": "omp-linux-x64",
-      "sha256": "04e9490f9394da6d6804474cc2e41eb3d18f8e26215df4b34bdd4ad4c0d8a401",
-      "hash": "sha256-BOlJD5OU2m1oBEdMwuQes9GPjiYhXfSzS91K1MDYpAE="
+      "sha256": "e8b937f9bf023baa147bdd300ad5421af0a6ef8b1f350c47a9a93d5fca94feca",
+      "hash": "sha256-6Lk3+b8CO6oUe90wCtVCGvCm74sfNQxHqak9X8qU/so="
     },
     "aarch64-darwin": {
       "asset": "omp-darwin-arm64",
-      "sha256": "d5a3324acd98375a01698a1b0c018be48caed2956c8aa9044ad137fe43bc0400",
-      "hash": "sha256-1aMySs2YN1oBaYobDAGL5Iyu0pVsiqkEStE3/kO8BAA="
+      "sha256": "43943119837612b2da72250ab7efe22ff8ca239eabebd4f702f34e3a144fdd3d",
+      "hash": "sha256-Q5QxGYN2ErLaciUKt+/iL/jKI56r69T3AvNOOhRP3T0="
     }
   }
 }
