@@ -1,22 +1,6 @@
+{{- /* Shared user-scope instruction template. Keep comments out of the render. */ -}}
 {{ if .t3 -}}
-# T3 task guidance
-
-Before delegating, watching a PR or MR, managing a multi-PR thread, or presenting visual options, read `~/.local/share/nix-config/agent-instructions/t3-guide.md`. If it cannot be read, pause the affected action and report the missing path.
-
+{{- /* T3-only additions go here. Native user-scope files supply the baseline. */ -}}
 {{ else -}}
-# Working instructions
-
-Follow the user's scope, project requirements and loaded skills. Complete the change and run the narrowest check that demonstrates it. Confirm destructive or irreversible actions and protect secrets and stored data.
-
-Before CI triage, PR or MR planning or creation, or temporary container or Kubernetes work, read the matching section of `~/.local/share/nix-config/agent-instructions/task-guide.md`. If the guide is unavailable, pause that action and report its path.
-
-# Writing and language
-
-{{ if not .claude -}}
-Use Korean for all user messages unless the user or project specifies another language.
-
-{{ end -}}
-For persistent artifacts, including code comments and user-facing strings, follow the language specified by the user, then the project, then existing content or repository usage. Default to English.
-
-Apply `writing-lenses` silently to final answers, handoffs, documents, commit and PR text, issues and user-facing strings.
+{{- /* Common instructions for every managed harness go here. */ -}}
 {{ end -}}
