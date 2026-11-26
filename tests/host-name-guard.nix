@@ -28,6 +28,7 @@ let
 
   scannedPaths = [
     "flake.nix"
+    "flake-inputs.json"
     "lib"
     "modules"
     "home"

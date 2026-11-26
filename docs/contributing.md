@@ -33,6 +33,7 @@ Maintain the module map and topic-specific reading list in the [repository refer
 
 - `nix develop`: enter the development shell.
 - `nix fmt`: format Nix files with `nixfmt-tree`.
+- `nix run .#flake-inputs -- generate --write`: re-render the generated `inputs` span in `flake.nix` after editing `flake-inputs.json`.
 - `nix fmt -- --ci`: check formatting without edits.
 - `nix flake check`: run declared checks (`checks.x86_64-linux` / `checks.aarch64-darwin`). NixOS VM tests are kept separate under `vmChecks`.
 - `nix build --no-link .#vmChecks.all`: build every NixOS VM test; requires Linux with `/dev/kvm`. Build one with `.#vmChecks.<name>`.
@@ -52,7 +53,7 @@ Scheduled maintenance lives in `.github/workflows/update-dependencies.yml`, alon
 
 Preserve exact commands, identifiers, and link targets. Keep `docs/agent-routing.md` aligned with changes to T3 routing in `home/h82/agents/instructions/t3-guide.md`.
 
-Use two-space Nix indentation and let `nix fmt` control layout. Keep each module focused on one concern. Follow existing lowercase hyphenated module and helper names. Remove redundant comments, but keep comments that explain non-obvious constraints. Keep `nixpkgs` on `nixos-unstable` and change `flake.lock` intentionally.
+Use two-space Nix indentation and let `nix fmt` control layout. Keep each module focused on one concern. Follow existing lowercase hyphenated module and helper names. Remove redundant comments, but keep comments that explain non-obvious constraints. Keep `nixpkgs` on `nixos-unstable` and change `flake.lock` intentionally. Change a flake input in `flake-inputs.json` and re-render the marked `inputs` span with `nix run .#flake-inputs -- generate --write`; edit the span by hand only to see the `flake-inputs` check fail.
 
 ## Testing guidelines
 
