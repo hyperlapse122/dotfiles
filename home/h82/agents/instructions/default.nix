@@ -40,11 +40,11 @@ let
     ''}
     ${command} --home "$HOME"
   '';
-  legacyGuides = [
-    ".local/share/nix-config/agent-instructions/task-guide.md"
-    ".local/share/nix-config/agent-instructions/t3-guide.md"
-  ];
   legacyGuideDirectory = ".local/share/nix-config/agent-instructions";
+  legacyGuides = [
+    "${legacyGuideDirectory}/task-guide.md"
+    "${legacyGuideDirectory}/t3-guide.md"
+  ];
   homeManagerFilePattern = "${builtins.storeDir}/*-home-manager-files/*";
 
 in

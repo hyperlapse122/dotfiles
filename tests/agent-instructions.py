@@ -12,7 +12,9 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md',
               'pi': '.pi/agent/AGENTS.md', 'opencode': '.config/opencode/AGENTS.md'}
 
 
-GUIDES = ('task-guide.md', 't3-guide.md')
+TASK_GUIDE = 'task-guide.md'
+T3_GUIDE = 't3-guide.md'
+GUIDES = (TASK_GUIDE, T3_GUIDE)
 
 
 def body(home, harness):
@@ -37,16 +39,17 @@ def check_receipt(text, receipts, kind, harness=None):
 
 
 def check_guides(sources):
+    texts = {name: sources[name].read_text() for name in GUIDES}
     for name, passage in (
-        ('task-guide.md', 'Read the first relevant CI failure'),
-        ('t3-guide.md', 'Arm the T3 watch with the full PR or MR URL'),
+        (TASK_GUIDE, 'Read the first relevant CI failure'),
+        (T3_GUIDE, 'Arm the T3 watch with the full PR or MR URL'),
     ):
-        assert passage in sources[name].read_text()
-    task = sources['task-guide.md'].read_text()
+        assert passage in texts[name]
+    task = texts[TASK_GUIDE]
     ci_triage, = (section for section in task.split('\n## ')
                   if 'ci triage' in section.partition('\n')[0].lower())
     assert '`decide' not in ci_triage and '`judge`' not in ci_triage, ci_triage
-    guide = sources['t3-guide.md'].read_text()
+    guide = texts[T3_GUIDE]
     assert 'Decide for subagent roles' not in task
     assert 'CE or harness defaults for delegation' in guide
     assert 'cross_model_review_mode: off' in guide
@@ -94,8 +97,13 @@ def main():
     template = Path(sys.argv[1]).read_text()
     helper, renderer = sys.argv[3:5]
     receipts = json.loads(Path(sys.argv[5]).read_text())
-    sources = dict(zip(GUIDES, (Path(sys.argv[6]), Path(sys.argv[7]))))
+    sources = {TASK_GUIDE: Path(sys.argv[6]), T3_GUIDE: Path(sys.argv[7])}
     check_guides(sources)
+    with tempfile.TemporaryDirectory() as temporary:
+        context = Path(temporary) / 't3.json'
+        context.write_text('{"t3": true}')
+        t3 = subprocess.check_output([renderer, sys.argv[1], str(context)], text=True)
+    assert t3 == ''
     for kind in ('nixos', 'darwin'):
         exercise(template, helper, renderer, kind, receipts)
     for entry in json.loads(Path(sys.argv[2]).read_text()):
@@ -146,10 +154,8 @@ def main():
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_text('Previous personal instructions\n')
             run(entry['activation'])
-            context = home / 't3.json'
-            context.write_text('{"t3": true}')
-            t3 = subprocess.check_output([renderer, sys.argv[1], str(context)], text=True)
-            assert t3 == ''
+            assert os.readlink(guides / 'task-guide.md') == str(sources['task-guide.md'])
+            assert (guides / 't3-guide.md').read_text() == 'personal copy\n'
             assert not (home / '.codex').exists(), 'retired Codex instructions were delivered'
             for harness in DELIVERIES:
                 destination = home / DELIVERIES[harness]
