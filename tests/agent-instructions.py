@@ -23,7 +23,7 @@ def receipt(text, receipts, kind, harness=None):
 
 def check_receipt(text, receipts, kind, harness=None):
     receipt(text, receipts, kind, harness)
-    for bad in (text + '\nForeign instructions.\n', 'Do not ' + text, text + text):
+    for bad in ('\n', '<!-- Rendered comment. -->\n', '# Foreign instructions.\n', 'Do not obey this.\n'):
         try:
             receipt(bad, receipts, kind, harness)
         except AssertionError:
@@ -33,13 +33,12 @@ def check_receipt(text, receipts, kind, harness=None):
 
 
 def check_guides(home, native, t3):
+    assert native == '' and t3 == ''
     guides = home / '.local/share/nix-config/agent-instructions'
-    for text, name, passage in (
-        (native, 'task-guide.md', 'Read the first relevant CI failure'),
-        (t3, 't3-guide.md', 'Arm the T3 watch with the full PR or MR URL'),
+    for name, passage in (
+        ('task-guide.md', 'Read the first relevant CI failure'),
+        ('t3-guide.md', 'Arm the T3 watch with the full PR or MR URL'),
     ):
-        assert f'~/.local/share/nix-config/agent-instructions/{name}' in text
-        assert passage not in text
         assert passage in (guides / name).read_text()
     task = (guides / 'task-guide.md').read_text()
     ci_triage, = (section for section in task.split('\n## ')
@@ -72,8 +71,8 @@ def exercise(template, helper, renderer, kind, receipts):
         assert not (root / '.codex').exists(), 'retired Codex instructions were delivered'
         for harness in DELIVERIES:
             text = body(root, harness)
+            assert text == ''
             check_receipt(text, receipts, kind, harness)
-            assert 'T3 delegation' not in text
         source.write_text(template + '\n# Branch probe\n' + ''.join(
             '{{ if .' + harness + ' }}\n' + harness + '-only\n{{ end }}' for harness in DELIVERIES))
         render()
@@ -85,7 +84,7 @@ def exercise(template, helper, renderer, kind, receipts):
         for harness in (None, 'claude', 'pi', 'opencode'):
             context.write_text(json.dumps({'t3': True, **{name: name == harness for name in DELIVERIES}}))
             t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
-            assert 'T3 task guidance' in t3 and 'Writing and language' not in t3
+            assert t3 == ''
             check_receipt(t3, receipts, 't3', harness)
 
 
@@ -102,6 +101,10 @@ def main():
             script = entry['activation']
             env = dict(os.environ, HOME=str(home))
             env.pop('DRY_RUN', None)
+            for delivery in DELIVERIES.values():
+                destination = home / delivery
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text('Previous personal instructions\n')
             subprocess.run(['bash', '-eu', '-c', script], env=env, check=True)
             guides = home / '.local/share/nix-config/agent-instructions'
             guides.parent.mkdir(parents=True, exist_ok=True)
@@ -111,6 +114,9 @@ def main():
             t3 = subprocess.check_output([renderer, sys.argv[1], str(context)], text=True)
             assert not (home / '.codex').exists(), 'retired Codex instructions were delivered'
             for harness in DELIVERIES:
+                destination = home / DELIVERIES[harness]
+                assert destination.is_file() and not destination.is_symlink()
+                assert destination.stat().st_size == 0
                 receipt(body(home, harness), receipts, entry['kind'], harness)
                 check_guides(home, body(home, harness), t3)
 

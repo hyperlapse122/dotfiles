@@ -61,6 +61,37 @@ class T3InstructionsTest(unittest.TestCase):
         self.assertEqual(self.read()['providerInstances']['claudeAgent']['environment'],
                          [{'name': 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH', 'value': '3'}])
 
+    def test_empty_claude_addition_without_state_removes_only_managed_arguments(self):
+        user_file = self.home / 'user append.md'
+        user_file.write_text('User-owned instructions\n')
+        managed_addition = self.instructions / 'claude.md'
+        managed_addition.write_text('')
+        user_arguments = [
+            '--append-system-prompt-file', str(user_file),
+            '--append-system-prompt', 'User-owned inline instructions',
+            '--disallowedTools', 'Read',
+        ]
+        self.write({'providerInstances': {'claudeAgent': {
+            'config': {
+                'launchArgs': self.module.join_args(user_arguments + [
+                    '--append-system-prompt-file', str(managed_addition),
+                ]),
+            },
+            'environment': [{
+                'name': 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH', 'value': '', 'sensitive': False,
+            }],
+        }}})
+        self.module.apply(self.home)
+        result = self.read()['providerInstances']['claudeAgent']
+        self.assertEqual(self.module.tokenize(result['config']['launchArgs']), user_arguments)
+        state = json.loads(self.settings.with_name('dotfiles-launch-state.json').read_text())
+        self.assertNotIn('claudeAgent', state['providers'])
+        settings_before = self.settings.read_bytes()
+        state_before = self.settings.with_name('dotfiles-launch-state.json').read_bytes()
+        self.module.apply(self.home)
+        self.assertEqual(self.settings.read_bytes(), settings_before)
+        self.assertEqual(self.settings.with_name('dotfiles-launch-state.json').read_bytes(), state_before)
+
     def test_schema_one_migration_preserves_user_controls_and_later_duplicates(self):
         name = 'claudeAgent'
         base = ['--disallowedTools', 'Read']

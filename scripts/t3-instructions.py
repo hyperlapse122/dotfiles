@@ -168,6 +168,17 @@ def apply(destination, hidden_models=()):
                 provider['environment'] = entries + [{'name': CLAUDE_DEPTH, 'value': '', 'sensitive': False}]
                 changed = True
         if not addition.strip() and not old and not controls:
+            current = config.get('launchArgs', '')
+            if not isinstance(current, str) or (str(addition_file) not in current and CLAUDE_MARKER not in current):
+                continue
+            arguments = tokenize(current)
+            cleaned = clean_owned(arguments, addition_file)
+            if cleaned != arguments:
+                if cleaned:
+                    config['launchArgs'] = join_args(cleaned)
+                else:
+                    config.pop('launchArgs', None)
+                changed = True
             continue
         current = config.get('launchArgs', '')
         if current == old.get('lastArgs'):
