@@ -1,8 +1,11 @@
 {
   description = "Declarative NixOS configuration for personal hosts";
 
+  # BEGIN flake-inputs (generated from flake-inputs.json; do not edit)
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs = {
+      url = "github:NixOS/nixpkgs/nixos-unstable";
+    };
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -19,32 +22,31 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Applies the system layer of a macOS host, with Home Manager inside it.
     nix-darwin = {
+      # Applies the system layer of a macOS host, with Home Manager inside it.
       url = "github:nix-darwin/nix-darwin/master";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Installs Homebrew itself on a macOS host, so the first apply needs no
-    # manual Homebrew install; nix-darwin's homebrew module installs the casks.
     nix-homebrew = {
+      # Installs Homebrew itself on a macOS host, so the first apply needs no
+      # manual Homebrew install; nix-darwin's homebrew module installs the casks.
       url = "github:zhaofengli/nix-homebrew";
       inputs.brew-src.url = "github:Homebrew/brew/main";
     };
-    # Supplies the Home Manager module (home/h82/agents/omp.nix), which owns
-    # ~/.omp/agent/config.yml; the CLI itself is the release binary pinned in
-    # packages/omp-release.json. The URL names that release's tag, so a relock
-    # holds still until the update workflow moves the tag, and the omp check
-    # fails when the locked revision differs from the pinned one.
     omp = {
+      # Supplies the Home Manager module (home/h82/agents/omp.nix), which owns
+      # ~/.omp/agent/config.yml; the CLI itself is the release binary pinned in
+      # packages/omp-release.json. The ref names that release's tag, so a relock
+      # holds still until the update workflow moves the tag, and the omp check
+      # fails when the locked revision differs from the pinned one.
       url = "github:can1357/oh-my-pi/v19.2.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Pinned to a release tag rather than a branch, and the registry in
-    # home/h82/agents/agent-plugin-pins.nix records the revision that tag is expected to
-    # name. A tag is mutable and a relock re-resolves the ref, so the tag alone
-    # is not a pin -- the agent-plugins check compares this input's locked
-    # revision against that recorded value and fails when upstream moves it.
     compound-engineering-plugin = {
+      # Pinned to a release tag rather than a branch. A tag is mutable and a
+      # relock re-resolves the ref, so the tag alone is not a pin:
+      # home/h82/agents/agent-plugin-pins.nix records the revision it must name,
+      # and the agent-plugins check compares it with flake.lock.
       url = "github:EveryInc/compound-engineering-plugin/compound-engineering-v3.38.3";
       flake = false;
     };
@@ -52,11 +54,11 @@
       url = "github:DaleSeo/korean-skills/v1.0.0";
       flake = false;
     };
-    # Published skills, installed unchanged. Each is pinned to
-    # a tag where upstream has one and to a commit otherwise; the registry in
-    # home/h82/agents/pinned-skills-pin.nix records the revision each must
-    # resolve to, and the pinned-skills check compares it with flake.lock.
     anthropic-skills = {
+      # Published skills, installed unchanged. Each is pinned to a tag where
+      # upstream has one and to a commit otherwise; home/h82/agents/pinned-skills-pin.nix
+      # records the revision each must resolve to, and the pinned-skills check
+      # compares it with flake.lock.
       url = "github:anthropics/skills/dbd4588f9e1033efb41dad4bef2f7947c8993d44";
       flake = false;
     };
@@ -97,6 +99,7 @@
       flake = false;
     };
   };
+  # END flake-inputs
 
   outputs =
     inputs@{ nixpkgs, ... }:
