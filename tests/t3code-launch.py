@@ -10,27 +10,30 @@ import sys
 import tempfile
 
 
-def validate(home, expected_opencode_addition):
+def assert_empty_regular_file(path):
+    assert path.is_file() and not path.is_symlink(), path
+    assert path.stat().st_size == 0, path
+
+
+def validate(home, expected_opencode_addition, expected_claude_arguments=None, expected_pi_arguments=None):
     settings = json.loads((home / '.t3/userdata/settings.json').read_text())
-    baseline = (home / '.claude/CLAUDE.md').read_text()
-    assert '# T3 delegation' not in baseline
-    assert '# T3 CE model selection' not in baseline
-    assert 'writing' in baseline.lower()
+    assert_empty_regular_file(home / '.claude/CLAUDE.md')
+    additions = home / '.t3/userdata/instructions'
+    for harness in ('claude', 'pi', 'opencode'):
+        assert_empty_regular_file(additions / (harness + '.md'))
     providers = settings['providerInstances']
     assert providers.get('grok') == {'driver': 'grok', 'enabled': False}
-    assert not (home / '.t3/userdata/instructions/grok.md').exists()
-    args = shlex.split(providers['claudeAgent']['config']['launchArgs'])
-    addition = Path(args[args.index('--append-system-prompt-file') + 1]).read_text()
-    assert '~/.local/share/nix-config/agent-instructions/t3-guide.md' in addition
-    assert '# T3 CE model selection' not in addition
-    assert 'writing' not in addition.lower()
-    assert not any(a.startswith('--disallowedTools') for a in args)
+    assert not (additions / 'grok.md').exists()
+    claude_config = providers['claudeAgent']['config']
+    if expected_claude_arguments is None:
+        assert 'launchArgs' not in claude_config
+    else:
+        assert shlex.split(claude_config['launchArgs']) == expected_claude_arguments
     assert {'name': 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH', 'value': '', 'sensitive': False} in providers['claudeAgent']['environment']
-    # Native discovery reads CLAUDE.md in both launch modes. Only the T3
-    # arguments attach an extra file; no native config or CLI wrapper is changed.
-    assert baseline + addition != baseline
-    pi = shlex.split(providers['pi']['config']['launchArgs'])
-    assert Path(pi[pi.index('--append-system-prompt') + 1]).read_text() == addition
+    pi = shlex.split(providers['pi']['config'].get('launchArgs', ''))
+    if expected_pi_arguments is not None:
+        assert pi == expected_pi_arguments
+    assert str(additions / 'pi.md') not in pi
     assert providers['pi']['enabled'] is True
     assert pi.count('--approve') == 1
     assert providers['pi']['config']['binaryPath'].endswith('/bin/pi')
@@ -64,6 +67,57 @@ def run_activation(entry, home, check=True):
     env.pop('DRY_RUN', None)
     return subprocess.run(['bash', '-eu', '-c', 'run() { "$@"; };\n' + script],
                           env=env, check=check, capture_output=not check, text=True)
+
+
+def exercise_migration(entry, home, expected_opencode_addition):
+    settings = home / '.t3/userdata/settings.json'
+    state = settings.with_name('dotfiles-launch-state.json')
+    document = json.loads(settings.read_text())
+    providers = document['providerInstances']
+    additions = settings.parent / 'instructions'
+    user_file = home / 'user-claude.md'
+    user_file.write_text('User-owned Claude instructions\n', encoding='utf-8')
+    claude_arguments = [
+        '--append-system-prompt-file', str(user_file),
+        '--append-system-prompt', 'User-owned inline instructions',
+        '--disallowedTools', 'Read',
+    ]
+    pi_arguments = ['--append-system-prompt', 'relative-project.md', '--thinking', 'low']
+    claude_managed = claude_arguments + [
+        '--append-system-prompt-file', str(additions / 'claude.md'),
+    ]
+    pi_managed = pi_arguments + ['--approve', '--append-system-prompt', str(additions / 'pi.md')]
+    providers['claudeAgent']['config']['launchArgs'] = shlex.join(claude_managed)
+    providers['pi']['config']['launchArgs'] = shlex.join(pi_managed)
+    old = {}
+    for name, base, managed, controls in (
+        ('claudeAgent', claude_arguments, claude_managed, []),
+        ('pi', pi_arguments, pi_managed, [['--approve']]),
+    ):
+        environment = providers[name].get('environment', [])
+        old[name] = {
+            'baseArgs': shlex.join(base),
+            'lastArgs': shlex.join(managed),
+            'hadArgs': True,
+            'controlArgs': controls,
+            'controlBaseArgs': base,
+            'baseEnvironment': environment,
+            'lastEnvironment': environment,
+            'hadEnvironment': 'environment' in providers[name],
+        }
+    settings.write_text(json.dumps(document))
+    state.write_text(json.dumps({'schema': 1, 'providers': old}))
+    run_activation(entry, home)
+    expected_claude = claude_arguments
+    expected_pi = pi_arguments + ['--approve']
+    validate(home, expected_opencode_addition, expected_claude, expected_pi)
+    settings_before = settings.read_bytes()
+    state_before = state.read_bytes()
+    run_activation(entry, home)
+    validate(home, expected_opencode_addition, expected_claude, expected_pi)
+    assert settings.read_bytes() == settings_before
+    assert state.read_bytes() == state_before
+    assert user_file.read_text() == 'User-owned Claude instructions\n'
 
 
 def main():
@@ -105,6 +159,9 @@ def main():
             # changed defaults, or losing the explicit Grok disable must fail.
             original = settings.read_text()
             mutations = [lambda d: d['providerInstances']['claudeAgent']['config'].update(launchArgs=''),
+                         lambda d: d['providerInstances']['claudeAgent']['config'].update(
+                             launchArgs='--append-system-prompt-file ' + shlex.quote(
+                                 str(home / '.t3/userdata/instructions/claude.md'))),
                          lambda d: d['providerInstances']['pi']['config'].update(launchArgs=d['providerInstances']['pi']['config']['launchArgs'].replace('--approve', '')),
                          lambda d: d.update(defaultThreadEnvMode='local'),
                          lambda d: d['providerInstances'].pop('grok')]
@@ -119,6 +176,22 @@ def main():
                 else:
                     raise AssertionError('launch mutation escaped validation')
             settings.write_text(original)
+            addition = home / '.t3/userdata/instructions/opencode.md'
+            addition.write_text('Foreign instructions\n')
+            try:
+                validate(home, expected_opencode_addition)
+            except (AssertionError, ValueError):
+                pass
+            else:
+                raise AssertionError('non-empty addition escaped validation')
+            addition.unlink()
+            try:
+                validate(home, expected_opencode_addition)
+            except (AssertionError, ValueError):
+                pass
+            else:
+                raise AssertionError('missing addition escaped validation')
+            exercise_migration(entry, home, expected_opencode_addition)
     print('T3 launch activation, instruction files, preferences, and mutation witnesses passed')
 
 
