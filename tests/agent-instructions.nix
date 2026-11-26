@@ -32,6 +32,8 @@ let
   ];
   retiredPaths = [
     ".local/share/nix-config/claude-code-agents.json"
+    ".local/share/nix-config/agent-instructions/task-guide.md"
+    ".local/share/nix-config/agent-instructions/t3-guide.md"
     ".codex/AGENTS.md"
     ".gemini/config/rules"
     ".t3/instructions/claude-code/CLAUDE.md"
@@ -59,8 +61,13 @@ let
     in
     lib.concatMapStrings (target: homeFile name user target 0) (deliveryPaths ++ retiredPaths)
     + homeFile name user ".local/share/nix-config/refresh-agent-instructions" 1
-    + homeFile name user ".local/share/nix-config/agent-instructions/task-guide.md" 1
-    + homeFile name user ".local/share/nix-config/agent-instructions/t3-guide.md" 1
+    +
+      lib.optionalString
+        (!(lib.elem "linkGeneration" (user.home.activation.legacyInstructionGuides.after or [ ])))
+        ''
+          echo ${esc "legacyInstructionGuides on ${name} must run after linkGeneration"} >&2
+          failed=1
+        ''
     + lib.optionalString ((user.my.user.gpgKey or null) == null) ''
       echo ${esc "my.user.gpgKey is unset on ${name}"} >&2
       failed=1
@@ -79,8 +86,8 @@ let
         key = entry.user.my.user.gpgKey;
         kind = entry.user.my.kind;
         activation = entry.user.home.activation.agentInstructions.data or "";
+        cleanup = entry.user.home.activation.legacyInstructionGuides.data or "";
         git = "${entry.user.home-files}/.config/git/config";
-        guides = "${entry.user.home-files}/.local/share/nix-config/agent-instructions";
       }) presentEntries
     )
   );
@@ -108,7 +115,7 @@ pkgs.runCommand "agent-instructions-tests"
       (import ../packages/agent-tools.nix { inherit pkgs; }).agentInstructions
     }/bin/agent-instructions ${
       (import ../packages/text-template.nix { inherit pkgs; })
-    }/bin/text-template ${./lib/agent-instruction-receipts.json}; then
+    }/bin/text-template ${./lib/agent-instruction-receipts.json} ${../home/h82/agents/instructions/task-guide.md} ${../home/h82/agents/instructions/t3-guide.md}; then
       failed=1
     fi
     if [ "$failed" != "0" ]; then
