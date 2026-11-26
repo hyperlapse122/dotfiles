@@ -53,7 +53,7 @@ Scheduled maintenance lives in `.github/workflows/update-dependencies.yml`, alon
 
 Preserve exact commands, identifiers, and link targets. Keep `docs/agent-routing.md` aligned with changes to T3 routing in `home/h82/agents/instructions/t3-guide.md`.
 
-Use two-space Nix indentation and let `nix fmt` control layout. Keep each module focused on one concern. Follow existing lowercase hyphenated module and helper names. Remove redundant comments, but keep comments that explain non-obvious constraints. Keep `nixpkgs` on `nixos-unstable` and change `flake.lock` intentionally. Change a flake input in `flake-inputs.json` and re-render the marked `inputs` span with `nix run .#flake-inputs -- generate --write`; edit the span by hand only to see the `flake-inputs` check fail.
+Use two-space Nix indentation and let `nix fmt` control layout. Keep each module focused on one concern. Follow existing lowercase hyphenated module and helper names. Remove redundant comments, but keep comments that explain non-obvious constraints. Keep `nixpkgs` on `nixos-unstable` and change `flake.lock` intentionally. Change a flake input in `flake-inputs.json` and re-render the marked `inputs` span with `nix run .#flake-inputs -- generate --write`; edit the span by hand only to see the `flake-inputs` check fail. When a pin file also records that input, move its `ref`/`tag` in the same change, then run `nix flake lock --update-input <name>` and confirm the locked revision matches the pin.
 
 ## Testing guidelines
 

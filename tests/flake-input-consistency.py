@@ -37,7 +37,23 @@ def normalize_edge(edge):
     return None
 
 
-def check_entry(inputs, lock, where, entry, node_name, top, errors):
+def check_follows(edge, target, where, child, errors):
+    if normalize_edge(edge) != target.split("/"):
+        errors.append(f"{where}: flake.lock follows {edge!r} for {child!r}, registry expects {target!r}")
+
+
+def node_edge(edge, where, child, errors):
+    """Return the lock node a repository edge points at, recording anything else."""
+    if isinstance(edge, str):
+        return edge
+    if edge is None:
+        errors.append(f"{where}: flake.lock has no edge for input {child!r}")
+    else:
+        errors.append(f"{where}: flake.lock resolves {child!r} by follows, registry declares a repository")
+    return None
+
+
+def check_entry(lock, where, entry, node_name, top, errors):
     nodes = lock.get("nodes", {})
     node = nodes.get(node_name)
     if node is None:
@@ -71,19 +87,20 @@ def check_entry(inputs, lock, where, entry, node_name, top, errors):
             errors.append(f"{where}: flake.lock records flake={locked_flag}, registry says {expected_flag}")
     for child_name, child in entry.get("inputs", {}).items():
         edge = node.get("inputs", {}).get(child_name)
-        if edge is None:
-            errors.append(f"{where}: flake.lock has no edge for input {child_name!r}")
-            continue
         if "follows" in child:
-            if normalize_edge(edge) != child["follows"].split("/"):
+            check_follows(edge, child["follows"], where, child_name, errors)
+            continue
+        child_node = node_edge(edge, where, child_name, errors)
+        if child_node is not None:
+            check_entry(lock, f"{where}.inputs.{child_name}", child, child_node, False, errors)
+    if top:
+        declared = entry.get("inputs", {})
+        for child_name, edge in node.get("inputs", {}).items():
+            if isinstance(edge, list) and child_name not in declared:
                 errors.append(
-                    f"{where}: flake.lock follows {edge!r} for {child_name!r}, registry expects {child['follows']!r}"
+                    f"{where}: flake.lock follows {'/'.join(edge)} for {child_name!r}, "
+                    "which the registry does not declare"
                 )
-        else:
-            if not isinstance(edge, str):
-                errors.append(f"{where}: flake.lock resolves {child_name!r} by follows, registry declares a repository")
-                continue
-            check_entry(inputs, lock, f"{where}.inputs.{child_name}", child, edge, False, errors)
 
 
 def main(argv):
@@ -107,7 +124,8 @@ def main(argv):
         "ref-pinned": [n for n, e in inputs.items() if "ref" in e],
         "rev-pinned": [n for n, e in inputs.items() if "rev" in e],
         "non-flake": [n for n, e in inputs.items() if e.get("flake") is False],
-        "follows": [
+        "follows": [n for n, e in inputs.items() if "follows" in e]
+        + [
             f"{n}.{c}"
             for n, e in inputs.items()
             for c, child in e.get("inputs", {}).items()
@@ -134,23 +152,17 @@ def main(argv):
 
     for name, entry in inputs.items():
         if "follows" in entry:
-            edge = root.get(name)
-            if normalize_edge(edge) != entry["follows"].split("/"):
-                errors.append(f"{name}: flake.lock follows {edge!r}, registry expects {entry['follows']!r}")
+            check_follows(root.get(name), entry["follows"], name, name, errors)
             continue
         node_name = root.get(name)
         if not isinstance(node_name, str):
+            if node_name is not None:
+                errors.append(f"{name}: flake.lock resolves the root input by follows, registry declares a repository")
             continue
-        check_entry(inputs, lock, name, entry, node_name, True, errors)
+        check_entry(lock, name, entry, node_name, True, errors)
 
-    nodes = lock.get("nodes", {})
-    brew_node = nodes.get("nix-homebrew", {}).get("inputs", {}).get("brew-src")
-    if brew_node is None:
-        errors.append("nix-homebrew has no brew-src input edge")
-    else:
-        ref = nodes.get(brew_node, {}).get("original", {}).get("ref")
-        if ref != "main":
-            errors.append(f"brew-src tracks {ref!r} instead of 'main'")
+    if not expectations.get("pins"):
+        errors.append("no pin expectation is declared; the comparison would pass vacuously")
 
     for name, want in expectations.get("pins", {}).items():
         entry = inputs.get(name)
@@ -158,6 +170,9 @@ def main(argv):
             errors.append(f"pin for {name} has no registry entry")
             continue
         recorded = entry.get("ref", entry.get("rev"))
+        if want.get("ref") is None and want.get("rev") is None:
+            errors.append(f"pin for {name} records neither ref nor rev")
+            continue
         if want.get("ref") is not None and recorded != want["ref"]:
             errors.append(f"{name}: registry points at {recorded!r}, the pin expects {want['ref']!r}")
         if "rev" in entry and want.get("rev") is not None and entry["rev"] != want["rev"]:

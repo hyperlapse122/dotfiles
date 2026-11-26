@@ -2,7 +2,6 @@
 let
   inherit (pkgs) lib;
 
-  # The generator owns the span; the check only reads and compares.
   generator = import ../packages/flake-inputs.nix { inherit pkgs; };
   registry = "${self}/flake-inputs.json";
   lock = "${self}/flake.lock";
@@ -14,30 +13,30 @@ let
   ompRelease = builtins.fromJSON (builtins.readFile "${self}/packages/omp-release.json");
 
   # Expectations come from the pin files, never from the registry or the lock.
+  present =
+    what: value:
+    if value == null || value == "" then
+      throw "flake-inputs expectations: ${what} is missing from its pin file"
+    else
+      value;
+  upstreams = present "pinned-skills-pin.nix upstreams" (pinnedSkills.upstreams or null);
   expectations = pkgs.writeText "flake-input-expectations.json" (
     builtins.toJSON {
       pins = {
-        omp = {
-          ref = "v${ompRelease.version}";
-          rev = ompRelease.rev;
-        };
-        compound-engineering-plugin = {
-          ref = agentPins.compound-engineering.tag;
-          rev = agentPins.compound-engineering.expectedRev;
-        };
-        korean-skills = {
-          ref = koreanPins.tag;
-          rev = koreanPins.expectedRev;
-        };
+        omp.ref = "v${present "packages/omp-release.json version" (ompRelease.version or null)}";
+        compound-engineering-plugin.ref = present "agent-plugin-pins.nix compound-engineering.tag" (
+          agentPins.compound-engineering.tag or null
+        );
+        korean-skills.ref = present "korean-skills-pin.nix tag" (koreanPins.tag or null);
       }
       // lib.listToAttrs (
         map (
           upstream:
-          lib.nameValuePair upstream.input {
-            inherit (upstream) ref;
-            rev = upstream.expectedRev or null;
-          }
-        ) (lib.filter (upstream: upstream ? input) pinnedSkills.upstreams)
+          if upstream ? input then
+            lib.nameValuePair upstream.input { inherit (upstream) ref; }
+          else
+            throw "pinned-skills pin '${upstream.name or "unnamed"}' names no flake input"
+        ) (upstreams ++ lib.optional (pinnedSkills ? impeccable) pinnedSkills.impeccable)
       );
     }
   );

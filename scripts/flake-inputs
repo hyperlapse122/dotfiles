@@ -7,7 +7,7 @@ between the marker comments in flake.nix.
 
 Usage:
   flake-inputs generate (--write | --check) [--registry PATH] [--flake PATH]
-  flake-inputs set NAME (--ref REF | --rev REV) [--registry PATH]
+  flake-inputs set NAME --ref REF [--registry PATH]
 
 `--check` fails when the span is stale, when the markers are missing or
 duplicated, or when an external reference appears outside the span.
@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import re
+import stat
 import sys
 import tempfile
 
@@ -24,12 +25,13 @@ BEGIN_MARKER = "# BEGIN flake-inputs (generated from flake-inputs.json; do not e
 END_MARKER = "# END flake-inputs"
 
 ALLOWED_ENTRY_KEYS = {"repo", "ref", "rev", "flake", "note", "inputs", "follows"}
-REPO_TYPES = ("github:", "gitlab:", "sourcehut:")
+REPO_TYPES = ("github", "gitlab", "sourcehut")
+REPO_KIND = "|".join(REPO_TYPES)
 IDENTIFIER = re.compile(r"^[A-Za-z0-9._-]+$")
 FOLLOWS_PATH = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
-REPO_REFERENCE = re.compile(r"^(?:github|gitlab|sourcehut):[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
-EXTERNAL_LITERAL = re.compile(r"github:|gitlab:|sourcehut:|git\+|tarball\+|https?://")
+REPO_REFERENCE = re.compile(rf"^(?:{REPO_KIND}):[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
+EXTERNAL_LITERAL = re.compile(rf"(?:{REPO_KIND}):|git\+|tarball\+|https?://")
 
 
 class RegistryError(Exception):
@@ -84,7 +86,7 @@ def validate_entry(entry, where):
             fail(f"{where}.follows: {target!r} is not an input path")
         return
     repo = non_empty_string(entry["repo"], f"{where}.repo")
-    if not repo.startswith(REPO_TYPES):
+    if repo.split(":", 1)[0] not in REPO_TYPES:
         fail(f"{where}.repo: {repo!r} must start with one of {', '.join(REPO_TYPES)}")
     if not REPO_REFERENCE.match(repo):
         fail(f"{where}.repo: {repo!r} must name a repository without a ref or rev segment")
@@ -123,7 +125,8 @@ def load_registry(path):
     unknown = sorted(set(data) - {"version", "inputs"})
     if unknown:
         fail(f"{path}: unknown key(s) {', '.join(unknown)}")
-    if data.get("version") != 1:
+    version = data.get("version")
+    if not isinstance(version, int) or isinstance(version, bool) or version != 1:
         fail(f"{path}: version must be 1")
     inputs = data.get("inputs")
     if not isinstance(inputs, dict) or not inputs:
@@ -168,10 +171,9 @@ def render_body(entry, prefix, indent, out, where):
 def render_span(registry):
     out = ["  inputs = {"]
     for name, entry in registry["inputs"].items():
-        path = f"inputs.{name}"
         if "follows" in entry:
-            target = string_literal(entry["follows"], path + ".follows")
-            out.append(f"    {path}.follows = {target};")
+            target = string_literal(entry["follows"], f"inputs.{name}.follows")
+            out.append(f"    {name}.follows = {target};")
             continue
         out.append(f"    {name} = {{")
         render_body(entry, "", 6, out, name)
@@ -203,10 +205,15 @@ def check_external_literals(outside, path):
 
 def write_atomic(path, content):
     directory = os.path.dirname(os.path.abspath(path))
+    try:
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+    except OSError:
+        mode = 0o644
     handle, temporary = tempfile.mkstemp(prefix=".flake-inputs-", dir=directory)
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as stream:
             stream.write(content)
+        os.chmod(temporary, mode)
         os.replace(temporary, path)
     except BaseException:
         try:
@@ -244,12 +251,8 @@ def command_set(args):
         fail(f"{args.registry}: no input named {args.name!r}")
     if "repo" not in entry:
         fail(f"{args.registry}: input {args.name!r} has no repository to point")
-    if args.ref is not None:
-        entry.pop("rev", None)
-        entry["ref"] = args.ref
-    else:
-        entry.pop("ref", None)
-        entry["rev"] = args.rev
+    entry.pop("rev", None)
+    entry["ref"] = args.ref
     validate_entry(entry, args.name)
     write_atomic(args.registry, json.dumps(registry, indent=2, ensure_ascii=False) + "\n")
     return 0
@@ -267,11 +270,9 @@ def main(argv):
     generate.add_argument("--flake", default="flake.nix", help="flake.nix path")
     generate.set_defaults(handler=command_generate)
 
-    setter = subparsers.add_parser("set", help="point one input at a new ref or revision")
+    setter = subparsers.add_parser("set", help="point one input at a new ref")
     setter.add_argument("name")
-    value = setter.add_mutually_exclusive_group(required=True)
-    value.add_argument("--ref")
-    value.add_argument("--rev")
+    setter.add_argument("--ref", required=True)
     setter.add_argument("--registry", default="flake-inputs.json", help="registry path")
     setter.set_defaults(handler=command_set)
 

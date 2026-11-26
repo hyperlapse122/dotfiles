@@ -45,6 +45,22 @@ step_run() {
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/update-dependencies-reconcile.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 
+# The update step must edit the registry and regenerate the span, never sed
+# flake.nix. A reintroduced rewrite fails here, and the guard itself is
+# proven against a mutated copy so it cannot pass vacuously.
+flake_nix_sed() {
+  jq -r '.jobs[].steps[] | .run // empty' <<<"$(yq -o=json '.' "$1")" |
+    grep -Eq '(^|[[:space:]])sed[[:space:]].*flake\.nix'
+}
+if flake_nix_sed "$workflow"; then
+  fail 'the update workflow rewrites flake.nix with sed'
+fi
+mutated=$scratch/update-dependencies-sed.yml
+awk '/^          # 1\. Update flake inputs$/ { print; print "          sed -i s/x/y/ flake.nix"; next } { print }' \
+  "$workflow" >"$mutated"
+flake_nix_sed "$mutated" || fail 'the sed-on-flake.nix guard missed an injected rewrite'
+pass 'a reintroduced sed on flake.nix is caught'
+
 # setup_clone <name>: a bare origin with main and a clone of it seeded with
 # the repository's real .gitignore and baseline pin files.
 setup_clone() {
@@ -426,8 +442,8 @@ pass 'the Prezto, claude-code, t3code, opencode, ollama, pi, acpx, and compound-
 read -r origin clone <<<"$(setup_clone omp-bump)"
 base_sha=$("$git_bin" -C "$clone" rev-parse HEAD)
 printf '{"version": "19.2.0", "rev": "4444444444444444444444444444444444444444", "platforms": {}}\n' >"$clone/packages/omp-release.json"
-sed -i 's#oh-my-pi/v19.1.1#oh-my-pi/v19.2.0#' "$clone/flake.nix"
-sed -i 's#"ref": "v19.1.1"#"ref": "v19.2.0"#' "$clone/flake-inputs.json"
+python3 "$flake_inputs" set omp --ref v19.2.0 --registry "$clone/flake-inputs.json"
+python3 "$flake_inputs" generate --write --registry "$clone/flake-inputs.json" --flake "$clone/flake.nix"
 sed -i 's/3333333333333333333333333333333333333333/4444444444444444444444444444444444444444/' "$clone/flake.lock"
 (cd "$clone" && bash -e -c "$push_script") >"$scratch/omp-bump-step.log" 2>&1 ||
   fail "the push step failed on the omp update: $(tail -n 5 "$scratch/omp-bump-step.log")"
