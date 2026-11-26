@@ -7,10 +7,17 @@ gitignore=${2:-}
 publisher=${3:-}
 verifier=${4:-}
 runner=${5:-}
-if [[ $# -ne 5 || -z $workflow || ! -f $workflow || -z $gitignore || ! -f $gitignore ]]; then
-  printf 'usage: %s WORKFLOW_FILE GITIGNORE_FILE PUBLISHER VERIFIER RUNNER\n' "${0##*/}" >&2
+flake_inputs=${6:-}
+if [[ $# -lt 5 || $# -gt 6 || -z $workflow || ! -f $workflow || -z $gitignore || ! -f $gitignore ]]; then
+  printf 'usage: %s WORKFLOW_FILE GITIGNORE_FILE PUBLISHER VERIFIER RUNNER [FLAKE_INPUTS]\n' "${0##*/}" >&2
   exit 2
 fi
+if [[ -z $flake_inputs ]]; then
+  flake_inputs=$(cd "$(dirname "$workflow")/../.." && pwd -P)/scripts/flake-inputs
+else
+  flake_inputs=$(cd "$(dirname "$flake_inputs")" && pwd -P)/$(basename "$flake_inputs")
+fi
+[[ -f $flake_inputs ]] || { printf 'update-dependencies-reconcile: FAIL: missing %s\n' "$flake_inputs" >&2; exit 2; }
 
 fail() { printf 'update-dependencies-reconcile: FAIL: %s\n' "$*" >&2; exit 1; }
 pass() { printf 'update-dependencies-reconcile: ok - %s\n' "$*"; }
@@ -54,10 +61,28 @@ setup_clone() {
   cp "$gitignore" "$clone/.gitignore"
   cat >"$clone/flake.nix" <<'EOF'
 {
-  inputs.compound-engineering-plugin.url = "github:EveryInc/compound-engineering-plugin/compound-engineering-v2.67.0";
-  inputs.omp.url = "github:can1357/oh-my-pi/v19.1.1";
+  # BEGIN flake-inputs (generated from flake-inputs.json; do not edit)
+  # END flake-inputs
 }
 EOF
+  cat >"$clone/flake-inputs.json" <<'EOF'
+{
+  "version": 1,
+  "inputs": {
+    "compound-engineering-plugin": {
+      "repo": "github:EveryInc/compound-engineering-plugin",
+      "ref": "compound-engineering-v2.67.0",
+      "flake": false
+    },
+    "omp": {
+      "repo": "github:can1357/oh-my-pi",
+      "ref": "v19.1.1"
+    }
+  }
+}
+EOF
+  python3 "$flake_inputs" generate --write --registry "$clone/flake-inputs.json" --flake "$clone/flake.nix" >/dev/null 2>&1 ||
+    { echo "could not render the seeded flake.nix" >&2; exit 1; }
   cat >"$clone/flake.lock" <<'EOF'
 {
   "nodes": {
@@ -215,6 +240,15 @@ case "\$*" in
     printf '{"version": "9.9.9"}\n' >packages/acpx-release.json
     printf '{"lockfileVersion": 3, "name": "acpx", "new": true}\n' >packages/acpx/package-lock.json
     ;;
+  "run .#flake-inputs -- set compound-engineering-plugin --ref compound-engineering-v2.68.0")
+    python3 "$flake_inputs" set compound-engineering-plugin --ref compound-engineering-v2.68.0
+    ;;
+  "run .#flake-inputs -- set omp --ref v19.2.0")
+    python3 "$flake_inputs" set omp --ref v19.2.0
+    ;;
+  "run .#flake-inputs -- generate --write")
+    python3 "$flake_inputs" generate --write
+    ;;
   *)
     echo "unexpected nix invocation: \$*" >&2
     exit 99
@@ -242,6 +276,10 @@ if grep -q '^::warning' "$scratch/update-all-step.log"; then
 fi
 grep -q 'compound-engineering-plugin/compound-engineering-v2.68.0' "$clone/flake.nix" ||
   fail "update step did not update compound-engineering tag in flake.nix"
+[[ $(jq -r '.inputs["compound-engineering-plugin"].ref' "$clone/flake-inputs.json") == compound-engineering-v2.68.0 ]] ||
+  fail "update step did not update the compound-engineering registry ref"
+[[ $(jq -r '.inputs.omp.ref' "$clone/flake-inputs.json") == v19.2.0 ]] ||
+  fail "update step did not update the omp registry ref"
 grep -q 'tag = "compound-engineering-v2.68.0";' "$clone/home/h82/agents/agent-plugin-pins.nix" ||
   fail "update step did not update tag in home/h82/agents/agent-plugin-pins.nix"
 grep -q 'expectedRev = "2222222222222222222222222222222222222222";' "$clone/home/h82/agents/agent-plugin-pins.nix" ||
@@ -361,7 +399,7 @@ printf '{"version": "2.3.2", "platforms": {}}\n' >"$clone/packages/opencode-rele
 printf '{"version": "2.1.0"}\n' >"$clone/packages/claude-code-manifest.json"
 printf '{"lockfileVersion": 3, "name": "acpx", "new": true}\n' >"$clone/packages/acpx/package-lock.json"
 sed -i 's/compound-engineering-v2.67.0/compound-engineering-v2.68.0/' \
-  "$clone/flake.nix" "$clone/home/h82/agents/agent-plugin-pins.nix"
+  "$clone/flake.nix" "$clone/flake-inputs.json" "$clone/home/h82/agents/agent-plugin-pins.nix"
 sed -i 's/1111111111111111111111111111111111111111/2222222222222222222222222222222222222222/' \
   "$clone/flake.lock" "$clone/home/h82/agents/agent-plugin-pins.nix"
 (cd "$clone" && bash -e -c "$push_script") >"$scratch/pin-bumps-step.log" 2>&1 ||
@@ -377,7 +415,7 @@ for expected in \
   'chore(packages): bump acpx to 0.21.0|packages/acpx-release.json packages/acpx/package-lock.json' \
   "chore(packages): bump t3code to $new_t3_version|packages/t3code-release.json" \
   'chore(packages): bump opencode to 2.3.2|packages/opencode-release.json' \
-  'chore(agents): bump compound-engineering to compound-engineering-v2.68.0|flake.lock flake.nix home/h82/agents/agent-plugin-pins.nix'; do
+  'chore(agents): bump compound-engineering to compound-engineering-v2.68.0|flake-inputs.json flake.lock flake.nix home/h82/agents/agent-plugin-pins.nix'; do
   subject=${expected%%|*} want=${expected#*|}
   sha=$(awk -v s="$subject" '{ sha = $1; sub(/^[^ ]+ /, "") } $0 == s { print sha }' <<<"$commits")
   [[ -n $sha ]] || fail "no commit '$subject' among: $commits"
@@ -389,6 +427,7 @@ read -r origin clone <<<"$(setup_clone omp-bump)"
 base_sha=$("$git_bin" -C "$clone" rev-parse HEAD)
 printf '{"version": "19.2.0", "rev": "4444444444444444444444444444444444444444", "platforms": {}}\n' >"$clone/packages/omp-release.json"
 sed -i 's#oh-my-pi/v19.1.1#oh-my-pi/v19.2.0#' "$clone/flake.nix"
+sed -i 's#"ref": "v19.1.1"#"ref": "v19.2.0"#' "$clone/flake-inputs.json"
 sed -i 's/3333333333333333333333333333333333333333/4444444444444444444444444444444444444444/' "$clone/flake.lock"
 (cd "$clone" && bash -e -c "$push_script") >"$scratch/omp-bump-step.log" 2>&1 ||
   fail "the push step failed on the omp update: $(tail -n 5 "$scratch/omp-bump-step.log")"
@@ -396,8 +435,8 @@ commits=$("$git_bin" -C "$clone" log --format='%H %s' "$base_sha..HEAD")
 [[ $(wc -l <<<"$commits") == 1 && $commits == *' chore(packages): bump omp to 19.2.0' ]] ||
   fail "expected one omp bump commit, found: $commits"
 files=$("$git_bin" -C "$clone" show --format= --name-only HEAD | sort | paste -sd ' ')
-[[ $files == 'flake.lock flake.nix packages/omp-release.json' ]] ||
-  fail "the omp bump carries $files, want flake.lock flake.nix packages/omp-release.json"
+[[ $files == 'flake-inputs.json flake.lock flake.nix packages/omp-release.json' ]] ||
+  fail "the omp bump carries $files, want flake-inputs.json flake.lock flake.nix packages/omp-release.json"
 pass 'an omp update lands as one commit carrying its pin, the flake tag, and the lock'
 
 python3 "$runner" "$workflow" "$publisher" "$verifier"

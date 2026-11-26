@@ -214,7 +214,17 @@ class Fixture:
         self.call('-C', str(self.repo), 'checkout', '-qb', 'main')
         files = {
             'tracked.txt': 'base dependency\n',
-            'flake.nix': '{\n  inputs.compound-engineering-plugin.url = "github:EveryInc/compound-engineering-plugin/compound-engineering-v2.67.0";\n}\n',
+            'flake.nix': '{\n  # BEGIN flake-inputs (generated from flake-inputs.json; do not edit)\n  # END flake-inputs\n}\n',
+            'flake-inputs.json': json.dumps({
+                'version': 1,
+                'inputs': {
+                    'compound-engineering-plugin': {
+                        'repo': 'github:EveryInc/compound-engineering-plugin',
+                        'ref': 'compound-engineering-v2.67.0',
+                        'flake': False,
+                    },
+                },
+            }, indent=2) + '\n',
             'home/h82/agents/synthetic-catalog.json': '{"data":[{"id":"old"}]}\n',
             'home/h82/agents/opencode-go-catalog.json': '{"data":[{"id":"old-go"}]}\n',
             'home/h82/agents/anthropic-models.json': '{"data":[{"id":"old-anthropic"}]}\n',

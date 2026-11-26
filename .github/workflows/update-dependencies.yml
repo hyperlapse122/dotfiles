@@ -192,13 +192,14 @@ jobs:
           PLUGIN_SOURCE="EveryInc/compound-engineering-plugin"
           TAG_PREFIX="compound-engineering-"
           resolved=$(nix run .#agent-plugin-release -- --source "$PLUGIN_SOURCE" --tag-prefix "$TAG_PREFIX")
-          current=$(sed -n 's#.*url = "github:EveryInc/compound-engineering-plugin/\(.*\)";#\1#p' flake.nix)
+          current=$(jq -r '.inputs["compound-engineering-plugin"].ref' flake-inputs.json)
           if [ -n "$resolved" ] && [ "$resolved" != "$current" ]; then
             case "$resolved" in
               "$TAG_PREFIX"v[0-9]*) ;;
               *) echo "refusing an unexpected resolved tag: $resolved" >&2; exit 1 ;;
             esac
-            sed -i "s#compound-engineering-plugin/$current#compound-engineering-plugin/$resolved#" flake.nix
+            nix run .#flake-inputs -- set compound-engineering-plugin --ref "$resolved"
+            nix run .#flake-inputs -- generate --write
             sed -i "s#tag = \"$current\";#tag = \"$resolved\";#" home/h82/agents/agent-plugin-pins.nix
             nix flake lock --update-input compound-engineering-plugin
             rev=$(jq -r '.nodes["compound-engineering-plugin"].locked.rev' flake.lock)
@@ -218,7 +219,8 @@ jobs:
             git checkout -- packages/omp-release.json
           elif [ -n "$(git status --porcelain -- packages/omp-release.json)" ]; then
             omp_tag="v$(jq -r .version packages/omp-release.json)"
-            sed -i "s#github:can1357/oh-my-pi/v[0-9][0-9.]*\"#github:can1357/oh-my-pi/$omp_tag\"#" flake.nix
+            nix run .#flake-inputs -- set omp --ref "$omp_tag"
+            nix run .#flake-inputs -- generate --write
             nix flake lock --update-input omp
             omp_pinned=$(jq -r .rev packages/omp-release.json)
             omp_locked=$(jq -r '.nodes.omp.locked.rev' flake.lock)
@@ -333,7 +335,7 @@ jobs:
           commit_if_pin_changed opencode packages/opencode-release.json
           commit_if_pin_changed ant packages/ant-release.json
           commit_if_pin_changed mise packages/mise-release.json
-          commit_if_pin_changed omp packages/omp-release.json flake.nix flake.lock
+          commit_if_pin_changed omp packages/omp-release.json flake-inputs.json flake.nix flake.lock
 
           if [ -n "$(git status --porcelain packages/prezto-pin.json)" ]; then
             NEW_REV=$(jq -r '.zshLock.archives[0].commit' packages/prezto-pin.json)
@@ -349,7 +351,7 @@ jobs:
 
           if [ -n "$(git status --porcelain home/h82/agents/agent-plugin-pins.nix)" ]; then
             NEW_TAG=$(sed -n 's/.*tag = "\(.*\)";/\1/p' home/h82/agents/agent-plugin-pins.nix)
-            git add flake.nix flake.lock home/h82/agents/agent-plugin-pins.nix
+            git add flake-inputs.json flake.nix flake.lock home/h82/agents/agent-plugin-pins.nix
             git commit -m "chore(agents): bump compound-engineering to $NEW_TAG"
           fi
 

@@ -26,7 +26,8 @@
           ${../.gitignore} \
           ${../scripts/ci-update-publish} \
           ${../scripts/ci-update-verify} \
-          ${./update-workflow.py}
+          ${./update-workflow.py} \
+          ${../scripts/flake-inputs}
         bash ${./synthetic-models-reconcile.sh} \
           ${../.github/workflows/update-dependencies.yml} \
           ${agentTools.syntheticModelsWatch}/libexec/synthetic-models-watch/synthetic-models-watch \
