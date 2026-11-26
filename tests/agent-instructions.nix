@@ -29,6 +29,7 @@ let
     ".claude/CLAUDE.md"
     ".pi/agent/AGENTS.md"
     ".config/opencode/AGENTS.md"
+    ".omp/agent/AGENTS.md"
   ];
   retiredPaths = [
     ".local/share/nix-config/claude-code-agents.json"
@@ -85,6 +86,7 @@ let
         inherit (entry) name;
         key = entry.user.my.user.gpgKey;
         kind = entry.user.my.kind;
+        delivery_paths = deliveryPaths;
         activation = entry.user.home.activation.agentInstructions.data or "";
         cleanup = entry.user.home.activation.legacyInstructionGuides.data or "";
         git = "${entry.user.home-files}/.config/git/config";
