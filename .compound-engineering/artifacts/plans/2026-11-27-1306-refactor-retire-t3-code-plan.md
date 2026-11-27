@@ -86,7 +86,7 @@ flowchart TB
 - F1. First apply after retirement
   - **Trigger:** The owner applies the changed configuration on a host that still has T3 Code installed.
   - **Actors:** Repository owner; Home Manager activation.
-  - **Steps:** The profile loses the T3 package; activation removes the macOS app copy and the declared settings keys or files; the T3 launch agent, Dock entry, and desktop entry disappear; T3 data stays.
+  - **Steps:** Close T3 Code and stop the `t3` CLI before applying so neither rewrites the settings during cleanup. The profile loses the T3 package; activation removes the macOS app copy and the declared settings keys or files; the T3 launch agent, Dock entry, and desktop entry disappear; T3 data stays.
   - **Outcome:** No T3 Code app or `t3` CLI remains; user data and worktrees are intact.
   - **Covers R5–R7.**
 - F2. Fresh configuration
@@ -197,7 +197,7 @@ flowchart TB
   Files --> Write[Write completion marker]
 ```
 
-The cleanup is a small state machine. A malformed settings file leaves the state untouched and the marker absent, so the next apply retries after the owner repairs it.
+The cleanup is a small state machine. A malformed settings file leaves the state untouched and the marker absent, so the next apply that produces a new Home Manager generation retries after the owner repairs it. On NixOS, a no-op rebuild of the same generation does not rerun activation.
 
 ```mermaid
 stateDiagram-v2
@@ -207,13 +207,13 @@ stateDiagram-v2
   Restoring --> Merging: launch state read
   Merging --> Cleaning: declared keys removed
   Cleaning --> Complete: marker written
-  Blocked --> Pending: next apply after repair
+  Blocked --> Pending: next generation apply after repair
   Complete --> [*]
 ```
 
 ### Risks & Dependencies
 
-- A malformed `settings.json` or `client-settings.json` makes `agent-settings` refuse. The helper warns, leaves the file and marker untouched, and returns success so the switch is not stranded; the next apply retries.
+- A malformed `settings.json` or `client-settings.json` makes `agent-settings` refuse. The helper warns, leaves the file and marker untouched, and returns success so the switch is not stranded; the next apply that produces a new generation retries.
 - A user may have edited a declared value or added a field inside a provider entry. Nested removals are value-aware, and keys the repository never wrote survive; only fields the repository declared are removed.
 - NixOS Home Manager activation runs only when the rebuild produces a new generation. The retirement change produces one; applying an older generation would not run the cleanup.
 - The two T3 worktrees contain uncommitted changes. Nothing in this plan deletes them; the owner should inspect them before any later data cleanup.
@@ -302,10 +302,10 @@ The change removes a managed agent surface, so the shared instruction template, 
 - **Approach:**
   1. Add a Home Manager activation entry ordered after `installPackages` that runs the helper unless `DRY_RUN` is set.
   2. Have the helper exit without changes when a completion marker exists.
-  3. Reuse the launch-state restoration logic from `scripts/t3-instructions.py` to restore provider launch arguments and environment from `dotfiles-launch-state.json`, and remove only the Pi hidden models the repository added. U5 deletes the composer once the helper owns this logic.
+  3. Reuse the launch-state restoration logic from `scripts/t3-instructions.py` to restore provider launch arguments and environment from `dotfiles-launch-state.json`, and remove only the Pi hidden models and Claude subagent-depth entry the repository added. U5 deletes the composer once the helper owns this logic.
   4. Run `agent-settings` with a removal declaration derived from the deleted module's server and client settings. Use value-aware nested removals; remove the declared fields inside provider instances and the OpenCode environment entry by name, pruning only objects the removals empty.
   5. Delete the generated instruction files, ownership ledger, and launch state, then write the completion marker last.
-  6. On unreadable or malformed JSON, leave every file untouched, warn, and exit successfully without writing the marker so a later apply retries.
+  6. On unreadable or malformed JSON, leave every file untouched, warn, and exit successfully without writing the marker so a later generation apply retries.
 - **Execution note:** Start with the cleanup tests against a seeded home. The activation rewrites user state, so prove the no-op, malformed, second-run, and user-key-preservation cases before wiring the activation entry.
 - **Test scenarios:**
   - A seeded home with repository-declared server and client keys and a user-only key loses the declared keys and keeps the user key.

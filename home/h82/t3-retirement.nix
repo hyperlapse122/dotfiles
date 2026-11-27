@@ -224,15 +224,6 @@ let
         {
           path = [
             "providerInstances"
-            "claudeAgent"
-            "environment"
-          ];
-          key = "name";
-          values = [ "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH" ];
-        }
-        {
-          path = [
-            "providerInstances"
             "opencode"
             "environment"
           ];

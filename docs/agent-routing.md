@@ -1,6 +1,6 @@
 # Agent routing
 
-The shared user-scope template currently contains only comments and a common-baseline branch skeleton. Normal activation produces byte-empty native instruction files for Claude Code, Pi, OpenCode, and omp (`~/.omp/agent/AGENTS.md`). Project instructions, independent harness settings, and shared skills remain active; Claude Code's own settings still select Korean conversation.
+The shared user-scope template currently contains only comments; the harness and host variables remain available to future content. Normal activation produces byte-empty native instruction files for Claude Code, Pi, OpenCode, and omp (`~/.omp/agent/AGENTS.md`). Project instructions, independent harness settings, and shared skills remain active; Claude Code's own settings still select Korean conversation.
 
 Delegation uses the role, model, and reasoning effort selected by CE or the harness unless the user specifies them.
 

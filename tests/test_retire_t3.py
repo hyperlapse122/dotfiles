@@ -26,8 +26,6 @@ SETTINGS_REMOVAL = {
          'value': 'beforeCacheExpires', 'prune': True},
     ],
     'removeEntries': [
-        {'path': ['providerInstances', 'claudeAgent', 'environment'],
-         'key': 'name', 'values': ['CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH']},
         {'path': ['providerInstances', 'opencode', 'environment'],
          'key': 'name', 'values': ['OPENCODE_CONFIG_CONTENT']},
     ],
@@ -82,6 +80,8 @@ class RetireT3Tests(unittest.TestCase):
                         {'name': 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH',
                          'value': '', 'sensitive': False},
                         {'name': 'USER_ENV', 'value': 'keep'},
+                        {'name': 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH',
+                         'value': '2', 'sensitive': False},
                     ],
                     'userField': 'keep',
                 },
@@ -120,6 +120,9 @@ class RetireT3Tests(unittest.TestCase):
         }))
         for name in ('claude.md', 'pi.md', 'opencode.md', 'user.md'):
             (self.instructions / name).write_text(name)
+        old_instructions = self.userdata.parent / 'instructions' / 'claude-code'
+        old_instructions.mkdir(parents=True, exist_ok=True)
+        (old_instructions / 'CLAUDE.md').write_text('old\n')
         (self.userdata / 't3code-settings-ownership.json').write_text('{}')
 
     def run_helper(self, home=None, hidden=('default', 'model-x')):
@@ -152,7 +155,10 @@ class RetireT3Tests(unittest.TestCase):
         self.assertNotIn('driver', claude)
         self.assertNotIn('enabled', claude)
         self.assertNotIn('idleCompaction', claude['config'])
-        self.assertEqual(claude['environment'], [{'name': 'USER_ENV', 'value': 'keep'}])
+        self.assertEqual(claude['environment'], [
+            {'name': 'USER_ENV', 'value': 'keep'},
+            {'name': 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH', 'value': '2', 'sensitive': False},
+        ])
         self.assertEqual(claude['userField'], 'keep')
         opencode = settings['providerInstances']['opencode']
         self.assertEqual(opencode['environment'], [{'name': 'USER_ENV', 'value': 'keep'}])
@@ -162,6 +168,7 @@ class RetireT3Tests(unittest.TestCase):
         self.assertFalse(self.state.exists())
         self.assertFalse((self.userdata / 't3code-settings-ownership.json').exists())
         self.assertEqual(sorted(path.name for path in self.instructions.iterdir()), ['user.md'])
+        self.assertFalse((self.userdata.parent / 'instructions' / 'claude-code').exists())
         self.assertTrue(self.marker.exists())
 
     def test_launch_arguments_are_restored_from_the_recorded_base(self):
@@ -173,6 +180,31 @@ class RetireT3Tests(unittest.TestCase):
             settings['providerInstances']['claudeAgent']['config']['launchArgs'],
             '--add-dir base',
         )
+
+    def test_user_argument_beside_the_recorded_launch_survives(self):
+        self.seed()
+        settings = json.loads(self.settings.read_text())
+        state = json.loads(self.state.read_text())
+        settings['providerInstances']['claudeAgent']['config']['launchArgs'] = (
+            state['providers']['claudeAgent']['lastArgs'] + ' --user-flag "quoted edit"'
+        )
+        self.settings.write_text(json.dumps(settings))
+        result = self.run_helper()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        restored = json.loads(self.settings.read_text())
+        self.assertEqual(
+            restored['providerInstances']['claudeAgent']['config']['launchArgs'],
+            '--add-dir base --user-flag "quoted edit"',
+        )
+
+    def test_user_changed_declared_value_survives(self):
+        self.seed()
+        settings = json.loads(self.settings.read_text())
+        settings['storageCleanup']['worktreeAfterDays'] = 10
+        self.settings.write_text(json.dumps(settings))
+        result = self.run_helper()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.settings.read_text())['storageCleanup']['worktreeAfterDays'], 10)
 
     def test_empty_launch_arguments_restore_the_recorded_base(self):
         self.seed()
@@ -186,6 +218,53 @@ class RetireT3Tests(unittest.TestCase):
             restored['providerInstances']['claudeAgent']['config']['launchArgs'],
             '--add-dir base',
         )
+
+    def test_non_object_documents_leave_every_file_untouched(self):
+        for path, value in ((self.settings, []), (self.client, 'text')):
+            with self.subTest(path=path.name):
+                self.seed()
+                path.write_text(json.dumps(value))
+                paths = [
+                    self.settings,
+                    self.client,
+                    self.state,
+                    self.userdata / 't3code-settings-ownership.json',
+                    *sorted(self.instructions.iterdir()),
+                ]
+                before = {item: item.read_bytes() for item in paths}
+                result = self.run_helper()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual({item: item.read_bytes() for item in paths}, before)
+                self.assertFalse(self.marker.exists())
+
+    def test_wrong_shaped_launch_state_does_not_write_the_marker(self):
+        self.seed()
+        self.state.write_text(json.dumps({'providers': [1]}))
+        result = self.run_helper()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.marker.exists())
+
+    def test_missing_launch_state_still_removes_declared_hidden_models(self):
+        self.seed()
+        self.state.unlink()
+        result = self.run_helper()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        client = json.loads(self.client.read_text())
+        self.assertEqual(client['providerModelPreferences']['pi']['hiddenModels'], ['user-model'])
+        self.assertTrue(self.marker.exists())
+
+    def test_interrupted_cleanup_retries_after_the_obstacle_is_removed(self):
+        self.seed()
+        ledger = self.userdata / 't3code-settings-ownership.json'
+        ledger.unlink()
+        ledger.mkdir()
+        result = self.run_helper()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.marker.exists())
+        ledger.rmdir()
+        result = self.run_helper()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.marker.exists())
 
     def test_missing_t3_directory_is_a_noop(self):
         empty = Path(self.tmp.name) / 'empty'
