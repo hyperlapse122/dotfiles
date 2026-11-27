@@ -23,20 +23,35 @@ let
 
   # Harness membership is declared separately from the source, so adding a
   # plugin to another agent is a row rather than a second source entry.
+  #
+  # A row's version-keyed links live in `base`, which defaults to the source
+  # name. Each sync prunes every other version in its base, so two rows sharing
+  # one would prune each other's rollback target on a version bump; evaluation
+  # stops on that. Every row after the first for a source names its own base.
   membership = [
     {
       name = "compound-engineering";
       harness = "claude";
+    }
+    {
+      name = "compound-engineering";
+      harness = "omp";
+      base = "compound-engineering-omp";
     }
   ];
 
   # The CLI each harness is driven through, and the environment it runs with.
   # Activation carries neither home.packages on PATH nor
   # home.sessionVariables, so Claude Code's declared tier is exported around it.
+  # omp needs none.
   harnesses = {
     claude = {
       cli = "${claudeCode}/bin/claude";
       env = claudeEnv;
+    };
+    omp = {
+      cli = "${config.programs.omp.package}/bin/omp";
+      env = "";
     };
   };
   knownHarnesses = lib.attrNames harnesses;
@@ -58,6 +73,7 @@ let
       );
 
   baseDir = "${config.home.homeDirectory}/.local/share/agent-plugins";
+  baseOf = row: "${baseDir}/${row.base or row.name}";
 
   # A source's segment is its tag without the train prefix, the same version
   # the materialized path is keyed by.
@@ -85,7 +101,7 @@ let
         --harness ${row.harness} \
         --cli ${harness.cli} \
         --source ${spec.src} \
-        --base ${lib.escapeShellArg "${baseDir}/${row.name}"} \
+        --base ${lib.escapeShellArg (baseOf row)} \
         --segment ${lib.escapeShellArg (segmentOf spec)} \
         --plugin ${lib.escapeShellArg spec.plugin} \
         --marketplace ${lib.escapeShellArg spec.marketplace}'';
@@ -94,7 +110,7 @@ let
   # row from `sources` alone leaves the plugin registered with its agent, and
   # its hooks keep firing, on every machine that ran an earlier generation.
   # Move it here instead, and delete the entry once every host has rebuilt
-  # past it.
+  # past it, keeping the `base` its membership row named, if any.
   retired = [ ];
 
   retireInvocation =
@@ -106,7 +122,7 @@ let
       env ${harness.env} ${syncTool} --retire \
         --harness ${row.harness} \
         --cli ${harness.cli} \
-        --base ${lib.escapeShellArg "${baseDir}/${row.name}"} \
+        --base ${lib.escapeShellArg (baseOf row)} \
         --plugin ${lib.escapeShellArg row.plugin} \
         --marketplace ${lib.escapeShellArg row.marketplace}'';
 
@@ -118,22 +134,32 @@ let
     fi
   '';
 
-  # Every harness row of a source shares one base, and each retire deletes the
-  # whole base after the membership rows ran, so retiring one harness while
-  # another keeps the source would delete that harness's live link on every
-  # activation. Retire every row of a source together, or split the base.
-  stillMember = lib.filter (row: lib.any (member: member.name == row.name) checkedMembership) retired;
+  # Each retire deletes its whole base after the membership rows ran, so
+  # retiring a row whose base a membership row still uses would delete that
+  # row's live link on every activation. Retire such rows together, or give
+  # the remaining row its own base.
+  stillMember = lib.filter (
+    row: lib.any (member: baseOf member == baseOf row) checkedMembership
+  ) retired;
+
+  sharedBase = lib.filter (
+    row: lib.length (lib.filter (member: baseOf member == baseOf row) checkedMembership) > 1
+  ) checkedMembership;
+
+  describe = rows: lib.concatMapStringsSep ", " (row: "${row.name} (${row.harness})") rows;
 
   syncScript =
-    lib.throwIf (stillMember != [ ])
-      "agent-plugins: retired row(s) still named in membership, which share its link: ${
-        lib.concatMapStringsSep ", " (row: "${row.name} (${row.harness})") stillMember
-      }"
+    lib.throwIf (sharedBase != [ ])
+      "agent-plugins: membership rows share a base, so each would prune the other's rollback target: ${describe sharedBase}"
       (
-        lib.concatStringsSep "\n" (
-          map (row: withDryRun (syncInvocation row)) checkedMembership
-          ++ map (row: withDryRun (retireInvocation row)) retired
-        )
+        lib.throwIf (stillMember != [ ])
+          "agent-plugins: retired row(s) share a base with a membership row, whose link retiring them would delete: ${describe stillMember}"
+          (
+            lib.concatStringsSep "\n" (
+              map (row: withDryRun (syncInvocation row)) checkedMembership
+              ++ map (row: withDryRun (retireInvocation row)) retired
+            )
+          )
       );
 in
 {

@@ -24,6 +24,10 @@
     is ordered so a refusal cannot strand installPackages, hands the helper the
     pinned source rather than some other path, and names the version segment
     the lock actually resolved.
+  - Each harness row keeps its links in a base of its own, because a sync
+    prunes every other version in its base. The helper's manifest check also
+    runs here, under --dry-run, against the pinned tree, which the
+    `agent-plugin-sync` check's sandbox cannot see.
 
   The pin assertion compares two genuinely separate sources: `flake.lock`,
   which Nix writes, and the pin file in home/h82/agents/agent-plugin-pins.nix,
@@ -59,6 +63,9 @@ let
   esc = value: lib.escapeShellArg (toString value);
 
   executeActivation = import ./lib/agent-activation.nix { inherit pkgs; };
+  syncTool = "${
+    (import ../packages/agent-tools.nix { inherit pkgs; }).agentPluginSync
+  }/bin/agent-plugin-sync";
 
   pluginName = "compound-engineering";
   pins = import ../home/h82/agents/agent-plugin-pins.nix;
@@ -92,11 +99,22 @@ let
         in
         if found == null then "" else "${found}/bin/${executable}";
       claudeCli = packagePath "claude-code" "claude";
+      baseRoot = "${homeDir}/.local/share/agent-plugins";
+      # Each row keeps its links in its own base, because a sync prunes every
+      # other version in its base and would otherwise delete the other row's
+      # rollback target.
       harnessChecks = [
         {
           name = "claude";
           pname = "claude-code";
           expectedCli = claudeCli;
+          base = "${baseRoot}/${pluginName}";
+        }
+        {
+          name = "omp";
+          pname = "omp";
+          expectedCli = packagePath "omp" "omp";
+          base = "${baseRoot}/${pluginName}-omp";
         }
       ];
 
@@ -176,6 +194,12 @@ let
             failed=1
           fi
 
+          baseArg=$(argValue "$block" base)
+          if [ "$baseArg" != ${esc harness.base} ]; then
+            echo "the ${harness.name} helper must keep its links in ${harness.base} on ${hostName}, got: '$baseArg'" >&2
+            failed=1
+          fi
+
           cliArg=$(argValue "$block" cli)
           if [ -z ${esc harness.expectedCli} ]; then
             echo 'missing ${harness.pname} in user packages on ${hostName}' >&2
@@ -185,6 +209,15 @@ let
             failed=1
           fi
         '') harnessChecks}
+
+        # Read from the rendered flags rather than the expected values above,
+        # so a row that drifts onto Claude's base fails here as well.
+        claudeBase=$(argValue "$(blockForHarness ${esc script} ${esc pluginName} claude)" base)
+        ompBase=$(argValue "$(blockForHarness ${esc script} ${esc pluginName} omp)" base)
+        if [ -z "$ompBase" ] || [ "$ompBase" = "$claudeBase" ]; then
+          echo "the omp helper must keep its links in a base of its own on ${hostName}, got: '$ompBase'" >&2
+          failed=1
+        fi
 
         # The activation unit carries no session variables, so Claude Code's
         # declared environment tier has to be exported around its CLI.
@@ -209,7 +242,7 @@ let
           harness = harness.name;
           cli = harness.expectedCli;
           source = pinnedSource;
-          base = "${homeDir}/.local/share/agent-plugins/${pluginName}";
+          inherit (harness) base;
           segment = lockSegment;
           plugin = pluginName;
           marketplace = "compound-engineering-plugin";
@@ -280,6 +313,18 @@ pkgs.runCommand "agent-plugins-tests"
       echo 'agents.toml no longer declares the plugin for the project scope' >&2
       failed=1
     fi
+
+    # Each harness's manifest check against the pinned tree itself. --dry-run
+    # stops after the refusals and runs no agent command.
+    for harness in claude omp; do
+      if ! ${syncTool} --dry-run --harness "$harness" --cli /nonexistent \
+        --source ${esc pinnedSource} --base "$TMPDIR/dry-run-$harness" \
+        --segment ${esc lockSegment} --plugin ${esc pluginName} \
+        --marketplace compound-engineering-plugin > /dev/null; then
+        echo "the $harness manifest check refuses the pinned plugin source" >&2
+        failed=1
+      fi
+    done
 
     ${lib.concatMapStringsSep "\n" assertEntry userEntries}
 

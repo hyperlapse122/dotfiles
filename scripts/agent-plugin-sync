@@ -4,7 +4,7 @@
 Creates a version-keyed symlink to the pinned source, drives the agent's own
 plugin commands against that path, and removes superseded versions only after
 the registration is observed pointing at the current one. --harness picks the
-agent (claude), whose adapter supplies commands, listings and manifest paths.
+agent (claude or omp), whose adapter supplies commands, listings and manifest paths.
 
 With --retire it does the reverse for a plugin the repository no longer
 declares: unregister it and delete its version-keyed base directory.
@@ -132,8 +132,7 @@ def listing(harness, argv, what, key):
 def registrations(harness, dry_run):
     if dry_run:
         return []
-    return listing(harness, ['plugin', 'marketplace', 'list', '--json'], 'marketplace list',
-                   'marketplaces')
+    return harness.marketplaces()
 
 
 def installed(harness):
@@ -158,6 +157,10 @@ class Harness:
 
     def remove_marketplace(self, name, dry_run):
         require([self.cli, 'plugin', 'marketplace', 'remove', name], dry_run, 'marketplace remove')
+
+    def marketplaces(self):
+        return listing(self, ['plugin', 'marketplace', 'list', '--json'], 'marketplace list',
+                       'marketplaces')
 
 
 class Claude(Harness):
@@ -218,8 +221,144 @@ class Claude(Harness):
         self.add_marketplace(previous, False)
 
 
+# omp's listings carry ANSI colour when it decides the output is a terminal.
+ANSI = re.compile(r'\x1b\[[0-9;]*m')
+
+
+class Omp(Harness):
+    """oh-my-pi, whose marketplace layer reads Claude Code's plugin format.
+
+    What this relies on, observed with omp 19.2.1:
+    - `marketplace add <path>` records path.resolve(<path>), so the listing
+      reports the version-keyed link itself, and it refuses a name that is
+      already registered.
+    - `marketplace list` prints text even when given --json.
+    - `plugin list --json` is {"npm": [...], "marketplace": [{"id", "scope",
+      "entries": [{"version", "installPath", "enabled"?}]}]}; "enabled" is
+      absent after a fresh install and false only while disabled.
+    - `install` refuses an id already installed at that scope, and `upgrade`
+      always reinstalls, from the tree the registered link resolves to.
+    - Install version resolution tries the catalog entry's version, then
+      .claude-plugin/plugin.json; the pinned tree ships no .omp-plugin/plugin.json.
+    """
+
+    marketplace_manifest = '.omp-plugin/marketplace.json'
+    plugin_manifest = '.claude-plugin/plugin.json'
+    plugin_key = 'id'
+    scope = 'user'
+
+    def __init__(self, cli):
+        super().__init__(cli)
+        self.wanted_version = ''
+        self.reregistered = False
+
+    def sync(self, args):
+        self.wanted_version = declared_version(args.source, args.plugin, self)
+        return marketplace_sync(args, self)
+
+    @staticmethod
+    def recorded_source(entry):
+        return str(entry.get('path') or '')
+
+    @staticmethod
+    def parse_marketplaces(text, what):
+        lines = [ANSI.sub('', line).rstrip() for line in text.splitlines()]
+        lines = [line for line in lines if line]
+        if lines and lines[0] == 'No marketplaces configured':
+            return []
+        if not lines or lines[0] != 'Configured Marketplaces:':
+            raise Failure('{} returned an unexpected listing: {!r}'.format(what, text[:200]))
+        parsed = []
+        for line in lines[1:]:
+            match = re.match(r'^  (\S+)  (\S.*)$', line)
+            if not match:
+                raise Failure('{} returned an unexpected line: {!r}'.format(what, line))
+            parsed.append({'name': match.group(1), 'path': match.group(2)})
+        return parsed
+
+    def marketplaces(self):
+        # No --json: omp ignores it here, and a release that starts honouring
+        # it would change the shape this parser reads.
+        what = 'marketplace list'
+        code, stdout, stderr = run_split([self.cli, 'plugin', 'marketplace', 'list'], False)
+        if code != 0:
+            raise Failure('{} failed: {}'.format(what, combined(stdout, stderr) or 'no output'))
+        return self.parse_marketplaces(stdout, what)
+
+    def entries(self, parsed, what, key):
+        # Only user-scope rows: a project install of the same id, listed first
+        # when activation runs inside a project, is not the install this
+        # manages. An unexpected shape stops the run, because reading it as
+        # empty would reinstall on every activation.
+        value = parsed.get('marketplace') if isinstance(parsed, dict) else None
+        if not isinstance(value, list):
+            raise Failure('{} returned an unexpected shape; expected an object with a '
+                          "'marketplace' list".format(what))
+        return [row for row in value if isinstance(row, dict) and row.get('scope') == self.scope]
+
+    def add_marketplace(self, path, dry_run):
+        require([self.cli, 'plugin', 'marketplace', 'add', path], dry_run, 'marketplace add')
+
+    def plugin_command(self, verb, plugin_id, dry_run):
+        require([self.cli, 'plugin', verb, plugin_id, '--scope', self.scope], dry_run,
+                'plugin ' + verb)
+
+    def remove_plugin(self, plugin_id, dry_run):
+        self.plugin_command('uninstall', plugin_id, dry_run)
+
+    def unregister(self, marketplace, plugin_id, dry_run):
+        # The installed plugin outlives its marketplace's removal, and
+        # ensure_plugin's upgrade repoints it, so only the marketplace goes.
+        self.reregistered = True
+        self.remove_marketplace(marketplace, dry_run)
+
+    def ensure_plugin(self, plugin_id, dry_run):
+        # Each step runs only when the listing shows it is needed, so a
+        # converged run changes nothing, and a plugin removed, disabled or
+        # left at another version between rebuilds comes back.
+        if dry_run:
+            self.plugin_command('install', plugin_id, True)
+            return
+        row = find(installed(self), plugin_id, key=self.plugin_key)
+        entries = row.get('entries') if row else None
+        if not entries or not isinstance(entries[0], dict):
+            self.plugin_command('install', plugin_id, False)
+            return
+        if self.reregistered or entries[0].get('version') != self.wanted_version:
+            self.plugin_command('upgrade', plugin_id, False)
+        if entries[0].get('enabled') is False:
+            self.plugin_command('enable', plugin_id, False)
+
+    def restore(self, previous, plugin_id, marketplace):
+        # omp refuses to add a name already registered, so a registration the
+        # failed run left elsewhere is removed first; one already back at the
+        # previous link is kept. The plugin is left alone: the next activation
+        # upgrades it to whatever version its generation pins.
+        entry = find(registrations(self, False), marketplace)
+        if entry is not None and self.recorded_source(entry) != previous:
+            self.remove_marketplace(marketplace, False)
+            entry = None
+        if entry is None:
+            self.add_marketplace(previous, False)
+
+
+def declared_version(source, plugin, harness):
+    """The version omp installs from this tree: the catalog entry's, else plugin.json's."""
+    try:
+        catalog = json.loads((source / harness.marketplace_manifest).read_text())
+        for entry in catalog.get('plugins') or []:
+            if isinstance(entry, dict) and entry.get('name') == plugin and entry.get('version'):
+                return str(entry['version'])
+        manifest = json.loads((source / harness.plugin_manifest).read_text())
+        return str(manifest.get('version') or '')
+    except (OSError, ValueError, AttributeError):
+        # read_manifests names the missing or broken file before anything runs.
+        return ''
+
+
 HARNESSES = {
     'claude': Claude,
+    'omp': Omp,
 }
 
 
