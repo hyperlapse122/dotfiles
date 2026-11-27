@@ -9,7 +9,7 @@ let
   isDarwin = config.my.kind == "darwin";
   # A stable path in front of the store SDK, so ANDROID_HOME, ~/.androidrc,
   # and the sdk.dir an IDE writes into local.properties survive a pin bump.
-  # On macOS it is the path T3 Code's device hub falls back to when an app
+  # On macOS it is the path the Android device hub falls back to when an app
   # started from the Dock has no ANDROID_HOME.
   sdkRoot =
     if isDarwin then

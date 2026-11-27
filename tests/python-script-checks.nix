@@ -33,7 +33,20 @@ in
         (import ../packages/gpg-tools.nix { inherit pkgs; }).restoreAgeIdentity
       }/bin/restore-age-identity"
       ./restore-age-identity.py;
-  serve-html = pythonScriptCheck "serve-html" ../scripts/serve-html ./test_serve_html.py;
+  retire-t3 =
+    pkgs.runCommand "retire-t3-tests"
+      {
+        nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.tomlkit ])) ];
+      }
+      ''
+        export PYTHONDONTWRITEBYTECODE=1
+        mkdir -p scripts tests
+        cp ${../scripts/retire-t3} scripts/retire-t3
+        cp ${../scripts/agent-settings} scripts/agent-settings
+        cp ${./test_retire_t3.py} tests/test_retire_t3.py
+        python tests/test_retire_t3.py
+        touch $out
+      '';
   overlay-release =
     pythonScriptCheck "overlay-release" ../scripts/overlay-release
       ./test_overlay_release.py;
@@ -66,9 +79,6 @@ in
     pythonScriptCheck "opencode-serving-model" ../scripts/opencode-serving-model
       ./test_opencode_serving_model.py;
   npm-release = releaseScriptCheck "npm-release" ../scripts/npm-release ./test_npm_release.py;
-  t3code-release =
-    pythonScriptCheck "t3code-release" ../scripts/t3code-release
-      ./test_t3code_release.py;
   synthetic-models-watch =
     let
       realSource = pkgs.writeText "synthetic-models.json" (

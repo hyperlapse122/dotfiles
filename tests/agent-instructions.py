@@ -11,12 +11,8 @@ import tempfile
 DELIVERIES = {'claude': '.claude/CLAUDE.md',
               'pi': '.pi/agent/AGENTS.md', 'opencode': '.config/opencode/AGENTS.md',
               'omp': '.omp/agent/AGENTS.md'}
-T3_HARNESSES = ('claude', 'pi', 'opencode')
-
-
 TASK_GUIDE = 'task-guide.md'
-T3_GUIDE = 't3-guide.md'
-GUIDES = (TASK_GUIDE, T3_GUIDE)
+GUIDES = (TASK_GUIDE,)
 
 
 def body(home, harness):
@@ -41,23 +37,12 @@ def check_receipt(text, receipts, kind, harness=None):
 
 
 def check_guides(sources):
-    texts = {name: sources[name].read_text() for name in GUIDES}
-    for name, passage in (
-        (TASK_GUIDE, 'Read the first relevant CI failure'),
-        (T3_GUIDE, 'Arm the T3 watch with the full PR or MR URL'),
-    ):
-        assert passage in texts[name]
-    task = texts[TASK_GUIDE]
+    task = sources[TASK_GUIDE].read_text()
+    assert 'Read the first relevant CI failure' in task
     ci_triage, = (section for section in task.split('\n## ')
                   if 'ci triage' in section.partition('\n')[0].lower())
     assert '`decide' not in ci_triage and '`judge`' not in ci_triage, ci_triage
-    guide = texts[T3_GUIDE]
     assert 'Decide for subagent roles' not in task
-    assert 'CE or harness defaults for delegation' in guide
-    assert 'cross_model_review_mode: off' in guide
-    for retired in ('T3 CE model selection', 'agent-usage --json', 'Fallback order',
-                    'Top child rung', 'reasoningEffort'):
-        assert retired not in guide, retired
 
 
 def exercise(template, helper, renderer, kind, receipts):
@@ -89,24 +74,14 @@ def exercise(template, helper, renderer, kind, receipts):
             assert harness + '-only' in text
             assert all(other + '-only' not in text for other in DELIVERIES if other != harness)
         source.write_text(template)
-        for harness in (None, *T3_HARNESSES):
-            context.write_text(json.dumps({'t3': True, **{name: name == harness for name in T3_HARNESSES}}))
-            t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
-            assert t3 == ''
-            check_receipt(t3, receipts, 't3', harness)
 
 
 def main():
     template = Path(sys.argv[1]).read_text()
     helper, renderer = sys.argv[3:5]
     receipts = json.loads(Path(sys.argv[5]).read_text())
-    sources = {TASK_GUIDE: Path(sys.argv[6]), T3_GUIDE: Path(sys.argv[7])}
+    sources = {TASK_GUIDE: Path(sys.argv[6])}
     check_guides(sources)
-    with tempfile.TemporaryDirectory() as temporary:
-        context = Path(temporary) / 't3.json'
-        context.write_text('{"t3": true}')
-        t3 = subprocess.check_output([renderer, sys.argv[1], str(context)], text=True)
-    assert t3 == ''
     for kind in ('nixos', 'darwin'):
         exercise(template, helper, renderer, kind, receipts)
     for entry in json.loads(Path(sys.argv[2]).read_text()):
@@ -148,10 +123,8 @@ def main():
 
             guides.mkdir(parents=True)
             (guides / 'task-guide.md').symlink_to(sources['task-guide.md'])
-            (guides / 't3-guide.md').write_text('personal copy\n')
             run(cleanup)
             assert os.readlink(guides / 'task-guide.md') == str(sources['task-guide.md'])
-            assert (guides / 't3-guide.md').read_text() == 'personal copy\n'
 
             sentinel = home / 'omp-agents-sentinel'
             sentinel.write_text('sentinel instructions\n')
@@ -180,7 +153,6 @@ def main():
                 destination.write_text('Previous personal instructions\n')
             run(entry['activation'])
             assert os.readlink(guides / 'task-guide.md') == str(sources['task-guide.md'])
-            assert (guides / 't3-guide.md').read_text() == 'personal copy\n'
             assert not (home / '.codex').exists(), 'retired Codex instructions were delivered'
             for harness in DELIVERIES:
                 destination = home / DELIVERIES[harness]

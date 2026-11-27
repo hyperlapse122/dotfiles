@@ -9,7 +9,7 @@ The shared Home Manager environment provides stable Flutter, its bundled Dart SD
 
 ## Check a host after applying its configuration
 
-Open a new terminal and restart T3 Code after the owner applies the normal host configuration. In both contexts, run:
+After the owner applies the normal host configuration, open a new terminal and run:
 
 ```sh
 command -v flutter dart
@@ -19,9 +19,9 @@ flutter doctor -v
 flutter devices
 ```
 
-Flutter and Dart should resolve through the Nix user profile and report the same versions in both contexts. The Flutter wrapper supplies Android SDK, JDK and Chrome defaults even when a GUI application inherits no shell variables. Explicit environment variables can override those defaults. An older `flutter config` selection can also affect discovery; use the paths reported by `flutter doctor -v` to diagnose it.
+Flutter and Dart should resolve through the Nix user profile and report the same versions. The Flutter wrapper supplies Android SDK, JDK and Chrome defaults even when a GUI application inherits no shell variables. Explicit environment variables can override those defaults. An older `flutter config` selection can also affect discovery; use the paths reported by `flutter doctor -v` to diagnose it.
 
-An optional editor warning does not prevent terminal or T3 development. Missing Xcode, a simulator runtime, an Android component or a browser does affect its corresponding target. A successful configuration build does not establish that those applications have been activated, that a device boots, or that T3 launched from the Dock or desktop menu finds the tools. Check those on each installed host.
+An optional editor warning does not prevent terminal development. Missing Xcode, a simulator runtime, an Android component or a browser does affect its corresponding target. A successful configuration build does not establish that those applications have been activated, that a device boots, or that a GUI-launched shell finds the tools. Check those on each installed host.
 
 Full Xcode is provisioned by production macOS activation. Apple account authentication, licenses, first-launch work and downloading the needed simulator runtime may need the owner's attention. Bootstrap outputs provide the CLI environment without requiring account authentication. The existing mobile-device configuration supplies Android AVDs on macOS; it does not declare an iOS simulator by default. See [macOS hosts](macos.md) for Xcode provisioning.
 
@@ -68,20 +68,6 @@ For desktop targets the ID is `linux` or `macos`; for Chrome it is `chrome`. Kee
 
 DevTools and VM service URLs contain session access tokens. Keep them local and private; do not commit them or paste them into shared reports. A new run gets a new URL.
 
-## Work from T3 Code
-
-Use T3's active worktree as the project directory. Keep the running app attached to that checkout so edits and hot reload use the same source. Use an interactive terminal session for `flutter run` or `flutter attach`, retain its session handle, and send the reload, restart or quit key to that session.
-
-For Android and iOS, the agent first selects the host and device with T3's `device_list` and `device_open`. The command returned by `device_open` owns every app launch, relaunch and device interaction. Build and install the app with the platform tools, launch it with that command, then connect the debugger:
-
-```sh
-flutter attach -d <device-id>
-```
-
-Use the Device panel for input and screenshots. Opening a browser-based DevTools session supplies source debugging; T3 does not need a separate Flutter debugger UI or an editor extension. Desktop and Chrome sessions can use `flutter run` directly.
-
-When reconnecting, check that the app is still running on the selected device, attach again and use the newly reported DevTools link. Quitting an attach session detaches the debugger; stop the task's app through the Device tools when finished. Stop desktop runs, standalone DevTools servers and other task-owned processes when their use ends. Leave devices and sessions belonging to other work alone.
-
 ## SDK versions and writable caches
 
 The SDK and engine artifacts live in the immutable Nix store. Pub, Gradle and project build outputs stay in writable user or project directories. Do not run `flutter upgrade` or try to repair the store with `flutter precache` or `sdkmanager`.
@@ -94,4 +80,4 @@ Flutter templates and native plugins can require different Android SDK or NDK ve
 
 Package installation checks exercise Flutter and bundled Dart. The shared profile check executes the commands reached through each production and bootstrap profile, checks target artifacts and compares the Flutter template's Android requirements with the materialized SDK. Darwin output checks reuse that profile check on a Mac builder.
 
-Repository checks and CI prove packaging and configuration. Disposable sample builds prove only the targets actually built. Device boot, app execution, hot reload, DevTools inspection and tool discovery in GUI-launched T3 need separate runtime evidence on each host. Record unavailable evidence as pending rather than inferring it from a successful flake build.
+Repository checks and CI prove packaging and configuration. Disposable sample builds prove only the targets actually built. Device boot, app execution, hot reload, DevTools inspection and tool discovery in GUI-launched sessions need separate runtime evidence on each host. Record unavailable evidence as pending rather than inferring it from a successful flake build.

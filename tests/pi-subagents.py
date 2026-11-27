@@ -45,7 +45,7 @@ def rpc(command, env, cwd, eligible):
             assert response['success'], response
             names = {command['name'] for command in response['data']['commands']}
             for name in ('subagents', 'skill:pi-subagents', 'parallel-research'):
-                assert (name in names) == eligible, (name, env.get('T3_PI_RUNTIME_MODE'), names)
+                assert (name in names) == eligible, (name, names)
             if eligible:
                 send({'id': 'prompt', 'type': 'prompt', 'message': start})
                 result = []
@@ -64,16 +64,10 @@ with tempfile.TemporaryDirectory() as directory:
     agent.mkdir()
     (agent / 'settings.json').write_text(json.dumps({'packages': [package], 'extensions': [provider]}))
     env = dict(os.environ, HOME=str(home), PI_CODING_AGENT_DIR=str(agent), PI_OFFLINE='1')
-    for key in ('T3_PI_RUNTIME_MODE', 'T3_PI_MCP_EXTENSION_PATH'):
-        env.pop(key, None)
     command = [pi, '--offline', '--no-session', '--provider', 'subagents-test', '--model', 'test']
     cli = subprocess.run([*command, '--mode', 'json', '-p', start], cwd=home, env=env,
                          capture_output=True, text=True, timeout=45)
     assert cli.returncode == 0, cli.stderr
     child_result(map(json.loads, cli.stdout.splitlines()))
 
-    rpc(command, env, home, False)
-    rpc(command, dict(env, T3_PI_RUNTIME_MODE='full-access'), home, False)
-    for mode in ('approval-required', 'auto-accept-edits', 'full-access'):
-        rpc(command, dict(env, T3_PI_MCP_EXTENSION_PATH=provider, T3_PI_RUNTIME_MODE=mode),
-            home, mode == 'full-access')
+    rpc(command, env, home, True)

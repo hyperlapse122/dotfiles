@@ -1,5 +1,5 @@
 /*
-  Exercise every instruction delivery and keep the T3 context separate.
+  Exercise every instruction delivery across the managed harnesses.
   Linux callers supply self; native Darwin callers supply explicit
   entries, each { name, user }, from production/bootstrap and fixture hosts.
 */
@@ -37,7 +37,6 @@ let
     ".local/share/nix-config/agent-instructions/t3-guide.md"
     ".codex/AGENTS.md"
     ".gemini/config/rules"
-    ".t3/instructions/claude-code/CLAUDE.md"
     ".grok/AGENTS.md"
     ".grok/rules/instructions.md"
   ];
@@ -117,7 +116,7 @@ pkgs.runCommand "agent-instructions-tests"
       (import ../packages/agent-tools.nix { inherit pkgs; }).agentInstructions
     }/bin/agent-instructions ${
       (import ../packages/text-template.nix { inherit pkgs; })
-    }/bin/text-template ${./lib/agent-instruction-receipts.json} ${../home/h82/agents/instructions/task-guide.md} ${../home/h82/agents/instructions/t3-guide.md}; then
+    }/bin/text-template ${./lib/agent-instruction-receipts.json} ${../home/h82/agents/instructions/task-guide.md}; then
       failed=1
     fi
     if [ "$failed" != "0" ]; then

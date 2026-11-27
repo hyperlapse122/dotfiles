@@ -28,8 +28,8 @@ in
       home.sessionVariables = peerVariables;
       systemd.user.sessionVariables = peerVariables;
     }
-    # Finder and Dock launches never read hm-session-vars.sh, so GUI apps such
-    # as T3 Code get the allowlist from launchd instead.
+    # Finder and Dock launches never read hm-session-vars.sh, so GUI apps get
+    # the allowlist from launchd instead.
     (lib.mkIf (config.my.kind == "darwin") {
       launchd.agents.cross-model-peers = {
         enable = true;

@@ -53,11 +53,9 @@ let
     printing = import ./printing.nix { inherit pkgs self; };
     proton-vpn = import ./proton-vpn.nix { inherit pkgs self; };
     python3-runtime = import ./python3-runtime.nix { inherit pkgs self; };
-    serve-html-profiles = import ./serve-html-profiles.nix { inherit pkgs self; };
     session-variables = import ./session-variables.nix { inherit pkgs self; };
     shell-utilities = import ./shell-utilities.nix { inherit pkgs self; };
     ssh-server = import ./ssh-server.nix { inherit pkgs self; };
-    t3code-traits = import ./t3code-traits.nix { inherit pkgs self; };
     test-audit-skill = import ./test-audit-skill.nix { inherit pkgs self; };
     tokscale = import ./tokscale.nix { inherit pkgs self; };
     udev-device-access = import ./udev-device-access.nix { inherit pkgs self; };
@@ -124,7 +122,6 @@ let
       plasma-taskbar = import ./plasma-taskbar.nix { inherit pkgs self; };
       sops-recipients = import ./sops-recipients.nix { inherit pkgs self; };
       synthetic-models = import ./synthetic-models.nix { inherit pkgs; };
-      t3code = import ./t3code.nix { inherit pkgs self system; };
       tailscale-single-router = import ./tailscale-single-router.nix { inherit pkgs configurations; };
       text-template = import ./text-template.nix { inherit pkgs; };
       tls-inspection-ca = import ./tls-inspection-ca.nix { inherit pkgs; };

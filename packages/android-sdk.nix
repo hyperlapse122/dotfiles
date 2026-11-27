@@ -75,7 +75,7 @@ in
   inherit repo sdkRoot;
   inherit (composition) androidsdk;
 
-  # The SDK root on macOS, in the layout T3 Code's device hub requires:
+  # The SDK root on macOS, in the layout the Android device hub requires:
   # cmdline-tools/latest beside the pinned version androidenv installs, and an
   # emulator/emulator that finds the SDK without the session variables.
   darwinSdkRoot =

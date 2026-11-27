@@ -37,11 +37,8 @@ in
   npm-release = agentTools.npmRelease;
   acpx = import ./acpx.nix { inherit pkgs; };
   tanstack-intent = import ./tanstack-intent.nix { inherit pkgs; };
-  t3code-release = agentTools.t3codeRelease;
   synthetic-models-watch = agentTools.syntheticModelsWatch;
   opencode-go-models-watch = agentTools.opencodeGoModelsWatch;
   provider-models-watch = agentTools.providerModelsWatch;
-  t3code = import ./t3code.nix { inherit pkgs; };
-  t3code-cli = import ./t3code-cli.nix { inherit pkgs; };
   android-sdk-release = agentTools.androidSdkRelease;
 }

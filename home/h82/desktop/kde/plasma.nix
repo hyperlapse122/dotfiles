@@ -7,16 +7,11 @@
 let
   kwrite = "${pkgs.kdePackages.kconfig}/bin/kwriteconfig6";
   kread = "${pkgs.kdePackages.kconfig}/bin/kreadconfig6";
-  # t3code.desktop is installed only with the T3 Code desktop trait
-  # (home/h82/t3code.nix), so it is pinned only then.
-  pinnedLaunchers = lib.concatStringsSep "," (
-    [
-      "preferred://browser"
-      "preferred://filemanager"
-      "applications:com.mitchellh.ghostty.desktop"
-    ]
-    ++ lib.optional config.my.t3.desktop.enable "applications:t3code.desktop"
-  );
+  pinnedLaunchers = lib.concatStringsSep "," [
+    "preferred://browser"
+    "preferred://filemanager"
+    "applications:com.mitchellh.ghostty.desktop"
+  ];
 in
 {
   home.activation.kdePlasmaApplets = lib.hm.dag.entryAfter [ "writeBoundary" ] ''

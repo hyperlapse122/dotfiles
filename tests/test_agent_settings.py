@@ -649,8 +649,8 @@ class OwnedKeyTests(unittest.TestCase):
         self.assertEqual(self.read(), OWNED)
 
     def test_owned_model_selections_drop_an_effort_an_earlier_generation_wrote(self):
-        # T3 Code's settings.json owns both Claude selections with no options,
-        # so the effort option an earlier rebuild wrote must not survive.
+        # An owned selection is replaced whole, so the effort option an
+        # earlier rebuild wrote must not survive.
         stale = {'instanceId': 'claudeAgent', 'model': 'claude-opus-5-5',
                  'options': [{'id': 'effort', 'value': 'xhigh'}]}
         self.seed({
@@ -941,7 +941,7 @@ class UpsertPathTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.settings = Path(self.tmp.name) / 'home/.t3/settings.json'
+        self.settings = Path(self.tmp.name) / 'home/.agent/settings.json'
         self.declared = Path(self.tmp.name) / 'declared.json'
         self.declare(UPSERT_ENTRY)
 
@@ -1104,104 +1104,6 @@ class UpsertPathTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.merge()
                 self.assertEqual(self.settings.read_bytes(), before)
-
-
-MIGRATE = {'from': 'providers', 'to': 'providerInstances',
-           'kinds': ['antigravity', 'claudeAgent', 'example']}
-
-
-class MigrateInstanceTests(unittest.TestCase):
-    """The retired providers block moves into providerInstances as T3 Code would."""
-
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.settings = Path(self.tmp.name) / 'home/.t3/settings.json'
-        self.declared = Path(self.tmp.name) / 'declared.json'
-        # The declaration home/h82/t3code.nix renders: the migration plus
-        # leaves that create the instances the migration must not lose.
-        self.declared.write_text(json.dumps({
-            'migrateInstances': MIGRATE,
-            'setPaths': [
-                {'path': ['providerInstances', 'claudeAgent', 'driver'], 'value': 'claudeAgent'},
-                {'path': ['providerInstances', 'claudeAgent', 'config', 'launchArgs'], 'value': '--add-dir x'},
-                {'path': ['providerInstances', 'antigravity', 'enabled'], 'value': True},
-            ],
-        }))
-
-    def seed(self, data):
-        self.settings.parent.mkdir(parents=True, exist_ok=True)
-        self.settings.write_text(json.dumps(data, indent=2))
-
-    def merge(self):
-        merger.merge(self.settings, self.declared)
-
-    def read(self):
-        return json.loads(self.settings.read_text())
-
-    def test_legacy_fields_survive_beside_the_declared_leaves(self):
-        self.seed({'providers': {
-            'claudeAgent': {'enabled': True, 'binaryPath': '/opt/claude', 'homePath': '/h'},
-            'antigravity': {'enabled': False},
-        }})
-        self.merge()
-        self.assertEqual(self.read(), {'providerInstances': {
-            'claudeAgent': {'driver': 'claudeAgent', 'enabled': True,
-                            'config': {'binaryPath': '/opt/claude', 'homePath': '/h',
-                                       'launchArgs': '--add-dir x'}},
-            'antigravity': {'driver': 'antigravity', 'enabled': True, 'config': {}},
-        }})
-
-    def test_kinds_not_listed_stay_for_t3_code_to_migrate(self):
-        self.seed({'providers': {'cursor': {'enabled': True, 'binaryPath': '/c'},
-                                 'example': {'binaryPath': '/x'}}})
-        self.merge()
-        result = self.read()
-        self.assertEqual(result['providers'], {'cursor': {'enabled': True, 'binaryPath': '/c'}})
-        self.assertEqual(result['providerInstances']['example'],
-                         {'driver': 'example', 'config': {'binaryPath': '/x'}})
-
-    def test_an_existing_instance_wins_and_the_legacy_block_goes(self):
-        instance = {'driver': 'claudeAgent', 'config': {'launchArgs': '--add-dir x', 'binaryPath': '/new'}}
-        self.seed({'providers': {'claudeAgent': {'binaryPath': '/old'}},
-                   'providerInstances': {'claudeAgent': instance}})
-        self.merge()
-        self.assertEqual(self.read(), {'providerInstances': {
-            'claudeAgent': instance, 'antigravity': {'enabled': True}}})
-
-    def test_an_empty_legacy_block_makes_no_instance(self):
-        self.seed({'providers': {'example': {}}})
-        self.merge()
-        self.assertNotIn('example', self.read()['providerInstances'])
-        self.assertNotIn('providers', self.read())
-
-    def test_second_run_does_not_rewrite_the_file(self):
-        self.seed({'providers': {'claudeAgent': {'binaryPath': '/opt/claude'}}})
-        self.merge()
-        before = self.settings.stat()
-        self.merge()
-        after = self.settings.stat()
-        self.assertEqual((before.st_ino, before.st_mtime_ns), (after.st_ino, after.st_mtime_ns))
-
-    def test_a_non_object_block_is_left_alone(self):
-        self.seed({'providers': ['claudeAgent']})
-        self.merge()
-        self.assertEqual(self.read()['providers'], ['claudeAgent'])
-
-    def test_refuses_malformed_declarations(self):
-        for migration in ({'from': 'providers', 'to': 'providerInstances'},
-                          dict(MIGRATE, kinds='example'),
-                          dict(MIGRATE, to='providers'),
-                          dict(MIGRATE, extra=1)):
-            with self.subTest(migration=migration):
-                self.declared.write_text(json.dumps({'migrateInstances': migration}))
-                with self.assertRaises(ValueError):
-                    merger.declaration(self.declared)
-
-    def test_refuses_a_migrated_key_that_is_also_removed(self):
-        self.declared.write_text(json.dumps({'migrateInstances': MIGRATE, 'remove': ['providers']}))
-        with self.assertRaises(ValueError):
-            merger.declaration(self.declared)
 
 
 PREFIX = '/home/h82/.local/share/agent-plugins/compound-engineering/'

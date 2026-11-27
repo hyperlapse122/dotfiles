@@ -101,7 +101,7 @@ def main():
         data = Path(temporary) / "context.json"
         for delivery, target in DELIVERIES.items():
             flags = {name: name == delivery for name in DELIVERIES}
-            data.write_text(json.dumps(context | flags | {"t3": False}))
+            data.write_text(json.dumps(context | flags))
             rendered[target] = subprocess.run(
                 [args.renderer, str(args.template), str(data)],
                 check=True, stdout=subprocess.PIPE,

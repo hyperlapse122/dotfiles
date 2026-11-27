@@ -40,11 +40,11 @@ work, apply it, then check the result against it before calling the work done.
 Run `impeccable detect <changed-dir>` on the affected UI source before calling the work done.
 File detection runs offline. Use it as a project check or in CI, outside per-edit hooks.
 
-For a rendered web UI in T3 Code, use its preview tools. In a standalone CLI
-session, point `agent-browser` at an already provisioned Chrome executable and a
-local page. Use a fresh session and temporary profile. Set the viewport, run a
-targeted measurement, then capture one viewport screenshot. Replace the sample
-URL and measurement with the page and behavior under review.
+For a rendered web UI in a CLI session, point `agent-browser` at an already
+provisioned Chrome executable and a local page. Use a fresh session and
+temporary profile. Set the viewport, run a targeted measurement, then capture
+one viewport screenshot. Replace the sample URL and measurement with the page
+and behavior under review.
 
 ```bash
 tmp=$(mktemp -d)

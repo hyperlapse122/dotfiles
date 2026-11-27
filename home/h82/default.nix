@@ -27,7 +27,7 @@ in
     ./dev
     ./security
     ./shell
-    ./t3code.nix
+    ./t3-retirement.nix
   ];
 
   home.username = config.my.user.name;
@@ -67,7 +67,6 @@ in
     ++ [
       (import ../../packages/claude-code.nix { inherit pkgs; })
       (import ../../packages/acpx.nix { inherit pkgs; })
-      (import ../../packages/agent-tools.nix { inherit pkgs; }).serveHtml
       (
         let
           nixTools = import ../../packages/nix-tools.nix { inherit pkgs; };

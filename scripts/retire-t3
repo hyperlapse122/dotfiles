@@ -1,0 +1,297 @@
+#!/usr/bin/env python3
+"""Remove T3 Code's repository-declared settings once, preserving user data."""
+
+import argparse
+import copy
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+
+CLAUDE_MARKER = '<dotfiles-preserved-claude-append>'
+MARKER = '.t3-retirement-complete'
+INSTRUCTION_FILES = (
+    'antigravity.md',
+    'claude.md',
+    'codex.md',
+    'grok.md',
+    'opencode.md',
+    'pi.md',
+)
+
+
+def load(path):
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError) as error:
+        raise ValueError('{}: {}'.format(path, error)) from None
+
+
+def publish(path, document):
+    encoded = (json.dumps(document, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
+    if path.is_file() and path.read_bytes() == encoded:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix='.t3-retirement-')
+    try:
+        with os.fdopen(descriptor, 'wb') as output:
+            output.write(encoded)
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+    return True
+
+
+def tokenize(value):
+    if not isinstance(value, str):
+        raise ValueError('launchArgs must be a string')
+    result, current, quote, quoted = [], '', None, False
+    index = 0
+    while index < len(value):
+        char = value[index]
+        following = value[index + 1] if index + 1 < len(value) else None
+        if quote:
+            if char == quote:
+                quote, quoted = None, True
+            elif char == '\\' and quote == '"' and following in ('"', '\\', '$', '`'):
+                current += following
+                index += 1
+            else:
+                current += char
+        elif char in ('"', "'"):
+            quote, quoted = char, True
+        elif char.isspace():
+            if current or quoted:
+                result.append(current)
+                current, quoted = '', False
+        elif char == '\\' and following is not None and (following.isspace() or following in ('"', "'")):
+            current += following
+            index += 1
+        else:
+            current += char
+        index += 1
+    if current or quoted:
+        result.append(current)
+    return result
+
+
+def join_args(arguments):
+    def quote(value):
+        if value and all(char.isalnum() or char in '-_./:=+@%' for char in value):
+            return value
+        return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+    return ' '.join(quote(value) for value in arguments)
+
+
+def flag_values(arguments, names):
+    values = []
+    for index, argument in enumerate(arguments):
+        if argument in names:
+            if index + 1 == len(arguments):
+                raise ValueError('a launch option requires a value')
+            values.append(arguments[index + 1])
+        else:
+            for name in names:
+                if argument.startswith(name + '='):
+                    values.append(argument[len(name) + 1:])
+    return values
+
+
+def clean_owned(arguments, addition_file):
+    result = []
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument in ('--append-system-prompt', '--append-system-prompt-file'):
+            following = arguments[index + 1] if index + 1 < len(arguments) else ''
+            if following == str(addition_file) or CLAUDE_MARKER in following:
+                index += 2
+                continue
+        if CLAUDE_MARKER in argument:
+            index += 1
+            continue
+        result.append(argument)
+        index += 1
+    return result
+
+
+def restore_arguments(current, old, addition_file):
+    arguments = tokenize(current)
+    previous = tokenize(old.get('lastArgs', ''))
+    matches = [
+        index
+        for index in range(len(arguments) - len(previous) + 1)
+        if previous and arguments[index:index + len(previous)] == previous
+    ]
+    if len(matches) == 1:
+        index = matches[0]
+        arguments[index:index + len(previous)] = tokenize(old.get('baseArgs', ''))
+    else:
+        baseline = tokenize(old.get('baseArgs', ''))
+        for control in old.get('controlArgs', []):
+            locations = [
+                index
+                for index in range(len(arguments) - len(control) + 1)
+                if arguments[index:index + len(control)] == control
+            ]
+            in_base = any(
+                baseline[index:index + len(control)] == control
+                for index in range(len(baseline) - len(control) + 1)
+            )
+            if len(locations) == 1 and not in_base:
+                index = locations[0]
+                arguments[index:index + len(control)] = old.get('controlBaseArgs', [])
+    arguments = clean_owned(arguments, addition_file)
+    # A file the user emptied after launch, or one that held only the managed
+    # append, still gets the arguments recorded before the launch composer ran.
+    if not arguments:
+        arguments = tokenize(old.get('baseArgs', ''))
+    return arguments
+
+
+def restore_provider(settings, state, name, harness, instructions):
+    provider = (settings.get('providerInstances') or {}).get(name)
+    record = (state.get('providers') or {}).get(name)
+    if not isinstance(provider, dict) or not isinstance(record, dict):
+        return False
+    config = provider.get('config')
+    if not isinstance(config, dict):
+        return False
+    addition_file = instructions / (harness + '.md')
+    changed = False
+    current = config.get('launchArgs')
+    if isinstance(current, str):
+        if current == record.get('lastArgs'):
+            if record.get('hadArgs'):
+                config['launchArgs'] = record.get('baseArgs', '')
+            else:
+                config.pop('launchArgs', None)
+            changed = True
+        else:
+            restored = join_args(restore_arguments(current, record, addition_file))
+            if restored != current:
+                if restored:
+                    config['launchArgs'] = restored
+                else:
+                    config.pop('launchArgs', None)
+                changed = True
+    environment = provider.get('environment')
+    if environment is not None and environment == record.get('lastEnvironment'):
+        if record.get('hadEnvironment'):
+            provider['environment'] = copy.deepcopy(record.get('baseEnvironment') or [])
+        else:
+            provider.pop('environment', None)
+        changed = True
+    return changed
+
+
+def remove_hidden_models(client, models):
+    preferences = client.get('providerModelPreferences')
+    if not isinstance(preferences, dict):
+        return False
+    pi = preferences.get('pi')
+    if not isinstance(pi, dict):
+        return False
+    hidden = pi.get('hiddenModels')
+    if not isinstance(hidden, list):
+        return False
+    keep = [model for model in hidden if model not in models]
+    if keep == hidden:
+        return False
+    if keep:
+        pi['hiddenModels'] = keep
+    else:
+        pi.pop('hiddenModels', None)
+    if not pi:
+        preferences.pop('pi', None)
+    if not preferences:
+        client.pop('providerModelPreferences', None)
+    return True
+
+
+def merge(merger, settings, declared, label):
+    result = subprocess.run(
+        [merger, '--label', label, '--settings', str(settings), '--declared', str(declared)],
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip() or 'unknown error'
+        print('retire-t3: {}'.format(message), file=sys.stderr)
+        return False
+    return True
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    parser.add_argument('--home', required=True, type=Path)
+    parser.add_argument('--merger', required=True)
+    parser.add_argument('--settings-declaration', required=True)
+    parser.add_argument('--client-declaration', required=True)
+    parser.add_argument('--hidden-model', action='append', default=[])
+    args = parser.parse_args(argv)
+
+    userdata = args.home / '.t3' / 'userdata'
+    if not userdata.is_dir():
+        return 0
+    marker = userdata / MARKER
+    if marker.exists():
+        return 0
+
+    settings_path = userdata / 'settings.json'
+    client_path = userdata / 'client-settings.json'
+    state_path = userdata / 'dotfiles-launch-state.json'
+    instructions = userdata / 'instructions'
+    ledger = userdata / 't3code-settings-ownership.json'
+
+    try:
+        settings = load(settings_path) or {}
+        client = load(client_path) or {}
+        state = load(state_path)
+    except ValueError as error:
+        print('retire-t3: {}; leaving the state for a later apply'.format(error), file=sys.stderr)
+        return 0
+
+    changed_settings = False
+    changed_client = False
+    if isinstance(state, dict):
+        changed_settings |= restore_provider(settings, state, 'claudeAgent', 'claude', instructions)
+        changed_settings |= restore_provider(settings, state, 'pi', 'pi', instructions)
+        changed_client |= remove_hidden_models(client, set(args.hidden_model) | {'default'})
+
+    try:
+        if changed_settings:
+            publish(settings_path, settings)
+        if changed_client:
+            publish(client_path, client)
+        if settings_path.is_file() and not merge(
+            args.merger, settings_path, args.settings_declaration, 'T3 Code retirement'
+        ):
+            return 0
+        if client_path.is_file() and not merge(
+            args.merger, client_path, args.client_declaration, 'T3 Code retirement'
+        ):
+            return 0
+        for name in INSTRUCTION_FILES:
+            (instructions / name).unlink(missing_ok=True)
+        try:
+            instructions.rmdir()
+        except OSError:
+            pass
+        ledger.unlink(missing_ok=True)
+        state_path.unlink(missing_ok=True)
+        marker.write_text('T3 Code repository settings retired.\n', encoding='utf-8')
+        os.chmod(marker, 0o600)
+    except OSError as error:
+        print('retire-t3: {}; leaving the marker absent'.format(error), file=sys.stderr)
+        return 0
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

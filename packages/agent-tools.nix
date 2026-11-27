@@ -66,8 +66,6 @@ let
   # Runs in continuous integration rather than at activation.
   agentPluginRelease = pythonHelper "agent-plugin-release" ../scripts/agent-plugin-release;
 
-  serveHtml = pythonHelper "serve-html" ../scripts/serve-html;
-
   # Resolves the latest release of Claude Desktop from the Debian APT repository.
   claudeDesktopRelease = pythonHelper "claude-desktop-release" ../scripts/claude-desktop-release;
 
@@ -108,7 +106,7 @@ let
   ompAuthSync = pythonHelper "omp-auth-sync" ../scripts/omp-auth-sync;
 
   # Names the provider and model that served an OpenCode session, from
-  # OpenCode's own session record, for T3 cross-model evidence.
+  # OpenCode's own session record, for cross-model evidence.
   opencodeServingModel = pythonHelper "opencode-serving-model" ../scripts/opencode-serving-model;
 
   ompRelease = releaseHelper "omp-release" ../scripts/omp-release;
@@ -132,8 +130,6 @@ let
     '';
     meta.mainProgram = "npm-release";
   };
-
-  t3codeRelease = pythonHelper "t3code-release" ../scripts/t3code-release;
 
   # Compares the Synthetic models in home/h82/agents/synthetic-models.nix with
   # Synthetic's catalog, and rewrites the committed Synthetic catalog snapshot.
@@ -172,11 +168,9 @@ in
     opencodeServingModel
     ompRelease
     npmRelease
-    t3codeRelease
     syntheticModelsWatch
     opencodeGoModelsWatch
     providerModelsWatch
     androidSdkRelease
-    serveHtml
     ;
 }
