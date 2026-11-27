@@ -1,7 +1,6 @@
 { config, lib, ... }:
 let
   inherit (config.my.user) home;
-  homeManagerApps = "${home}/Applications/Home Manager Apps";
 in
 {
   options.my.dock.hostApps = lib.mkOption {
@@ -34,7 +33,6 @@ in
     ]
     ++ config.my.dock.hostApps
     ++ [ "/Applications/Ghostty.app" ]
-    ++ lib.optional config.my.t3.desktop.enable "${homeManagerApps}/${import ../../packages/t3code-app-bundle.nix}"
     ++ [
       "/Applications/Claude.app"
     ];

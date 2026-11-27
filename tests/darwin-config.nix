@@ -218,9 +218,7 @@ let
         if lib.length matches == 1 then lib.last (lib.head matches) else null;
       peerSet = value: if value == null then null else sort (lib.splitString "," value);
       nixApps = lib.attrNames (lib.filterAttrs (_: app: app ? nix) mapping.apps);
-      missingNixApps = lib.filter (
-        name: !lib.elem name pnames && (name != "t3code-desktop" || user.my.t3.desktop.enable)
-      ) nixApps;
+      missingNixApps = lib.filter (name: !lib.elem name pnames) nixApps;
       credentialHelper = lib.findFirst (
         p: (p.pname or "") == "docker-credential-sops"
       ) null user.home.packages;
@@ -305,7 +303,7 @@ let
       brewLines = lib.filter (lib.hasInfix brewExe) rootLines;
       kakaoInstall = "if ! appStoreMas install ${kakaoTalkId} && ! appStoreMas get ${kakaoTalkId}; then";
       flightyInstall = "if ! appStoreMas install ${flightyId} && ! appStoreMas get ${flightyId}; then";
-      # Where T3 Code's device hub looks when ANDROID_HOME is unset.
+      # Where the Android device hub looks when ANDROID_HOME is unset.
       androidSdkRoot = "${config.my.user.home}/Library/Android/sdk";
       # By target, so an entry renamed onto the path is still found.
       androidSdkFile = lib.findFirst (file: file.enable && file.target == "Library/Android/sdk") null (
@@ -441,9 +439,6 @@ let
       (check config.homebrew.onActivation.autoUpdate "${entry.name}: homebrew autoUpdate is off, so brew bundle never refreshes cask metadata and upgrade sees no newer version")
       (check (missingNixApps == [ ])
         "${entry.name}: apps the mapping installs from Nix are missing: ${lib.concatStringsSep ", " missingNixApps}"
-      )
-      (check (user.my.t3.desktop.enable && lib.elem "t3code-desktop" pnames)
-        "${entry.name}: the macOS fixture must enable and install the T3 Code desktop app, or its darwin-outputs assertions vanish"
       )
       (check (routingTable ? "docker.io" && !(routingTable ? "https://index.docker.io/v1/"))
         "${entry.name}: the credential helper must route docker.io and no longer the Docker Hub index alias"
@@ -1066,48 +1061,41 @@ let
     ];
 
   # The Dock pins the shared apps in order with the host's own apps before
-  # Ghostty, T3 Code only with its trait, Downloads as the one
-  # folder, and sets only show-recents and tilesize among the other keys.
+  # Ghostty, Downloads as the one folder, and sets only show-recents and
+  # tilesize among the other keys.
   assertDock =
     entry:
     let
       config = entry.host.config;
       home = config.my.user.home;
       hostApps = config.my.dock.hostApps or [ ];
-      expected =
-        t3:
-        [
-          "/System/Applications/Apps.app"
-          "/Applications/Google Chrome.app"
-          "/System/Applications/App Store.app"
-          "/System/Applications/Mail.app"
-          "/System/Applications/Calendar.app"
-          "/System/Applications/Reminders.app"
-          "/System/Applications/Notes.app"
-          "/System/Applications/Messages.app"
-          "/Applications/KakaoTalk.app"
-          "/Applications/Telegram Desktop.app"
-          "/System/Applications/FaceTime.app"
-          "/System/Applications/Phone.app"
-          "/System/Applications/Photos.app"
-          "/System/Applications/Music.app"
-          "/System/Applications/iPhone Mirroring.app"
-        ]
-        ++ hostApps
-        ++ [ "/Applications/Ghostty.app" ]
-        ++ lib.optional t3 "${home}/Applications/Home Manager Apps/${import ../packages/t3code-app-bundle.nix}"
-        ++ [
-          "/Applications/Claude.app"
-        ];
+      expected = [
+        "/System/Applications/Apps.app"
+        "/Applications/Google Chrome.app"
+        "/System/Applications/App Store.app"
+        "/System/Applications/Mail.app"
+        "/System/Applications/Calendar.app"
+        "/System/Applications/Reminders.app"
+        "/System/Applications/Notes.app"
+        "/System/Applications/Messages.app"
+        "/Applications/KakaoTalk.app"
+        "/Applications/Telegram Desktop.app"
+        "/System/Applications/FaceTime.app"
+        "/System/Applications/Phone.app"
+        "/System/Applications/Photos.app"
+        "/System/Applications/Music.app"
+        "/System/Applications/iPhone Mirroring.app"
+      ]
+      ++ hostApps
+      ++ [ "/Applications/Ghostty.app" ]
+      ++ [
+        "/Applications/Claude.app"
+      ];
       appsOf =
         c:
         map (tile: tile.tile-data.file-data._CFURLString or null) (
           lib.defaultTo [ ] c.system.defaults.dock.persistent-apps
         );
-      withoutT3 =
-        (entry.host.extendModules {
-          modules = [ { my.t3.desktop.enable = lib.mkForce false; } ];
-        }).config;
       dock = config.system.defaults.dock;
       unmanaged = [
         "autohide"
@@ -1119,15 +1107,12 @@ let
       ];
     in
     lib.concatStrings [
-      (check (config.my.t3.desktop.enable && hostApps != [ ])
-        "${entry.name}: the fixture must enable my.t3.desktop and set my.dock.hostApps, or the order checks prove nothing"
-      )
       (check (
-        appsOf config == expected true
+        hostApps != [ ]
+      ) "${entry.name}: the fixture must set my.dock.hostApps, or the order checks prove nothing")
+      (check (
+        appsOf config == expected
       ) "${entry.name}: the Dock's pinned apps differ from the declared order")
-      (check (
-        appsOf withoutT3 == expected false
-      ) "${entry.name}: without my.t3.desktop the Dock must pin no T3 Code and keep the rest in order")
       (check
         (
           dock.persistent-others or null == [

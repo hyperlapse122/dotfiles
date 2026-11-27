@@ -29,8 +29,6 @@ A directory under `hosts/` without a `host.nix` file is a NixOS host. Create `ho
   ];
   my.user.name = "alice";
   my.user.home = "/home/alice";
-  my.t3.cli.enable = true;
-  my.t3.desktop.enable = true;
 }
 ```
 
@@ -45,8 +43,6 @@ Traits and shared host options live in `modules/shared/host.nix`:
 | `my.nuphyGem80.enable` | Installs the hidraw udev rule granting the local seat access to the NuPhy Gem80 keyboard (NixOS). |
 | `my.sennheiserBtd.enable` | Installs the hidraw udev rule granting the local seat access to the Sennheiser BTD 600 dongle (NixOS). |
 | `my.sshServer.enable` | Enables an OpenSSH server accepting only `my.user.name`, authenticated by the OpenPGP card's authentication subkey from `keys/signing.asc` (NixOS). |
-| `my.t3.cli.enable` | Installs the headless T3 Code server, `t3` (`packages/t3code-cli.nix`), on NixOS or macOS. |
-| `my.t3.desktop.enable` | Installs the T3 Code desktop app (`packages/t3code.nix`) on NixOS or macOS. |
 | `my.printing.queues` | List of CUPS queue labels decrypted from `secrets/printers.yaml` (NixOS, empty by default). |
 | `my.tlsInspectionCa.enable` | Decrypts `secrets/hosts/<host>/tls-inspection-ca.yaml` into `/etc/ssl/nix-config/` and configures system and tool CA trust (macOS). |
 | `my.networkRecovery.enable` | Runs the `org.nixos.network-recovery` launch daemon and sets `CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=60000` (macOS). |
@@ -217,8 +213,6 @@ Create `hosts/<host>/` with two files. `host.nix` marks the directory as a macOS
 {
   my.user.name = "<account>";
   my.user.home = "/Users/<account>";
-  my.t3.cli.enable = true;
-  my.t3.desktop.enable = true;
 }
 ```
 

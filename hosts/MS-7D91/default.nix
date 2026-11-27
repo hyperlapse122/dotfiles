@@ -7,8 +7,6 @@
   my.user.name = "h82";
   my.user.home = "/home/h82";
   my.nuphyGem80.enable = true;
-  my.t3.cli.enable = true;
-  my.t3.desktop.enable = true;
   my.printing.queues = [ "office" ];
   my.tailscale.advertiseRoutes = !config.my.bootstrap;
   my.wiredNetwork.enable = true;

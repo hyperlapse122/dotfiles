@@ -280,16 +280,16 @@ class ClassificationTest(WatchTestCase):
             self.finding(result, "new-version", "glmFlash")["candidates"], ["hf:zai-org/GLM-5.4-Flash"]
         )
 
-    def test_missing_glm_flash_is_removed_with_its_t3_fallback_role_and_no_older_replacement(self):
+    def test_missing_glm_flash_is_removed_with_no_older_replacement(self):
         result, body = self.drift(without(snapshot(), GLM_FLASH))
         self.assertEqual(len(result["findings"]), 1, result["findings"])
         finding = self.finding(result, "removed", "glmFlash")
         self.assertEqual(finding["id"], GLM_FLASH)
-        self.assertEqual(finding["uses"], ["t3-fallback"])
+        self.assertEqual(finding["uses"], [])
         self.assertEqual(finding["candidates"], [])
-        self.assertIn("t3-fallback", body.splitlines()[0])
+        self.assertNotIn("t3-fallback", body.splitlines()[0])
 
-    def test_glm_flash_without_high_is_changed_for_its_t3_fallback_role_and_default_effort(self):
+    def test_glm_flash_without_high_is_changed_for_its_default_effort(self):
         catalog = snapshot()
         for model in catalog["data"]:
             if model["id"] == GLM_FLASH:
@@ -298,7 +298,7 @@ class ClassificationTest(WatchTestCase):
         self.assertEqual(len(result["findings"]), 1, result["findings"])
         finding = self.finding(result, "changed", "glmFlash")
         self.assertEqual(finding["missingEfforts"], ["high"])
-        self.assertEqual(finding["uses"], ["t3-fallback", "defaultEffort"])
+        self.assertEqual(finding["uses"], ["defaultEffort"])
 
     def test_a_higher_version_on_the_same_created_is_newer(self):
         catalog = snapshot()

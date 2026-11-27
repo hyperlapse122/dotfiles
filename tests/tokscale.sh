@@ -252,8 +252,7 @@ fi
 
 # --- Caller-supplied history directories -------------------------------------
 
-mkdir -p "$home/.t3/userdata/providers/antigravity/old/antigravity-acp/conversations" \
-  "$home/.gemini/antigravity-acp/conversations"
+mkdir -p "$home/.gemini/antigravity-acp/conversations"
 
 run
 [[ ! -f $rec/extra ]] || fail "TOKSCALE_EXTRA_DIRS was set to '$(recorded extra)'"

@@ -44,11 +44,11 @@ The flake builds two outputs for each macOS host, `darwinConfigurations.<host>` 
 - **Android SDK.** `packages/android-sdk.nix` builds the pinned Android SDK for Apple silicon with `arm64-v8a` system images and links it at `~/Library/Android/sdk`, with `ANDROID_HOME` and `ANDROID_SDK_ROOT` pointing there.
 - **Xcode agent skills.** Production activation exports the selected Xcode's skills into the agent skill roots; see [Xcode agent skills](#xcode-agent-skills).
 - **Mobile devices.** The iOS Simulators and Android Virtual Devices listed in `my.mobileDevices`; see [Mobile devices](#mobile-devices).
-- **Nix apps.** VSCodium and the T3 Code desktop app (`0.1.8`) come from Nix. Home Manager copies their bundles into `~/Applications/Home Manager Apps`.
+- **Nix apps.** VSCodium comes from Nix. Home Manager copies its bundle into `~/Applications/Home Manager Apps`.
 - **Containers.** Apple's `container` CLI (`modules/darwin/container.nix`), with no Podman machine and no automatic minikube cluster; see [Containers](#containers).
 - **Fonts.** The shared font list (`modules/shared/font-packages.nix` and `packages/overlay-fonts.nix`, including Pretendard, Jetendard, D2Coding, Monoplex KR, Noto CJK, and Twemoji) is installed system-wide.
-- **Dock and system defaults.** `modules/darwin/defaults.nix` enables automatic light/dark appearance (`AppleInterfaceStyleSwitchesAutomatically = true`). `modules/darwin/dock.nix` sets tile size `32`, hides recent applications (`show-recents = false`), pins `~/Downloads` on the right side of the Dock, and replaces `persistent-apps` on each apply. The Dock starts with the system-owned Finder, Apps, Google Chrome, and App Store. Its personal apps include Messages, KakaoTalk, Telegram Desktop, FaceTime, and Phone in that order. The host's `my.dock.hostApps` follow the personal apps and precede Ghostty; T3 Code follows Ghostty when `my.t3.desktop.enable` is on, followed by Claude. The module defines the complete ordered list.
-- **User environment.** zsh (Prezto modules and completions), Ghostty (`Jetendard`), Git with YubiKey OpenPGP signing via `gpg-git` and `dotfiles-pinentry`, `.NET` 8 and 10, Rust (`rustup`), C++/CMake/Ninja/`vcpkg`, Bun, `mise`, `gh`, `glab`, `tokscale`, T3 Code `0.1.8`, and the managed coding agents (Claude Code, Pi `1.5.0`, and OpenCode `2.3.2`). See [App notes](#app-notes).
+- **Dock and system defaults.** `modules/darwin/defaults.nix` enables automatic light/dark appearance (`AppleInterfaceStyleSwitchesAutomatically = true`). `modules/darwin/dock.nix` sets tile size `32`, hides recent applications (`show-recents = false`), pins `~/Downloads` on the right side of the Dock, and replaces `persistent-apps` on each apply. The Dock starts with the system-owned Finder, Apps, Google Chrome, and App Store. Its personal apps include Messages, KakaoTalk, Telegram Desktop, FaceTime, and Phone in that order. The host's `my.dock.hostApps` follow the personal apps and precede Ghostty, followed by Claude. The module defines the complete ordered list.
+- **User environment.** zsh (Prezto modules and completions), Ghostty (`Jetendard`), Git with YubiKey OpenPGP signing via `gpg-git` and `dotfiles-pinentry`, `.NET` 8 and 10, Rust (`rustup`), C++/CMake/Ninja/`vcpkg`, Bun, `mise`, `gh`, `glab`, `tokscale`, and the managed coding agents (Claude Code, Pi `1.5.0`, and OpenCode `2.3.2`). See [App notes](#app-notes).
 
 ## First setup on the Mac
 
@@ -320,9 +320,7 @@ Remove temporary containers, images, volumes, networks, and build caches as soon
 - At GUI login, accept the macOS prompt to make Google Chrome the default browser for HTTP and HTTPS links. To request the prompt again, run `launchctl kickstart gui/$(id -u)/org.nix-community.home.google-chrome-default`.
 - Homebrew installs the Korean build of Firefox Developer Edition in `/Applications` during system activation. If Homebrew adopts an existing copy, that copy keeps its language. To replace it with the Korean build, quit Firefox and run `brew reinstall --cask --language=ko firefox@developer-edition`.
 - VSCodium's user directory is `~/Library/Application Support/VSCodium/User`. Its `keybindings.json` is a read-only store link; add keybindings in `home/h82/dev/vscodium.nix`.
-- The T3 Code desktop app is the flake's pinned release (`0.1.8`, `T3 Code (Beta).app`). A launchd agent sets `T3CODE_DISABLE_AUTO_UPDATE=1` at login so the app does not self-update off the pin.
 - Every package in the NixOS user environment must have a corresponding decision in `modules/shared/darwin-apps.nix` (Homebrew cask, Nix package, or explicit exclusion reason); the `darwin-config` check enforces this.
-- T3 Code finds the Android SDK at `~/Library/Android/sdk` when launched from Finder or the Dock.
 
 ### Xcode agent skills
 

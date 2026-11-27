@@ -153,8 +153,8 @@ let
     leftArrowOpensAgents = false;
   };
 
-  # The user-scope fff MCP server, by its store path so a GUI or T3 Code
-  # session that lacks the login PATH still starts it.
+  # The user-scope fff MCP server, by its store path so a GUI or CLI session
+  # that lacks the login PATH still starts it.
   globalConfigEntries = decideCommand: [
     {
       path = [ "mcpServers" ];

@@ -1,0 +1,336 @@
+#!/usr/bin/env python3
+"""Remove T3 Code's repository-declared settings once, preserving user data."""
+
+import argparse
+import copy
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+
+CLAUDE_MARKER = '<dotfiles-preserved-claude-append>'
+CLAUDE_DEPTH = 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH'
+MARKER = '.t3-retirement-complete'
+INSTRUCTION_FILES = (
+    'antigravity.md',
+    'claude.md',
+    'codex.md',
+    'grok.md',
+    'opencode.md',
+    'pi.md',
+)
+
+
+def load(path):
+    try:
+        document = json.loads(path.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as error:
+        raise ValueError('{}: {}'.format(path, error)) from None
+    if not isinstance(document, dict):
+        raise ValueError('{}: not a JSON object'.format(path))
+    return document
+
+
+def publish(path, document):
+    encoded = (json.dumps(document, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
+    if path.is_file() and path.read_bytes() == encoded:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix='.t3-retirement-')
+    try:
+        with os.fdopen(descriptor, 'wb') as output:
+            output.write(encoded)
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+    return True
+
+
+def tokenize(value):
+    if not isinstance(value, str):
+        raise ValueError('launchArgs must be a string')
+    result, current, quote, quoted = [], '', None, False
+    index = 0
+    while index < len(value):
+        char = value[index]
+        following = value[index + 1] if index + 1 < len(value) else None
+        if quote:
+            if char == quote:
+                quote, quoted = None, True
+            elif char == '\\' and quote == '"' and following in ('"', '\\', '$', '`'):
+                current += following
+                index += 1
+            else:
+                current += char
+        elif char in ('"', "'"):
+            quote, quoted = char, True
+        elif char.isspace():
+            if current or quoted:
+                result.append(current)
+                current, quoted = '', False
+        elif char == '\\' and following is not None and (following.isspace() or following in ('"', "'")):
+            current += following
+            index += 1
+        else:
+            current += char
+        index += 1
+    if current or quoted:
+        result.append(current)
+    return result
+
+
+def join_args(arguments):
+    def quote(value):
+        if value and all(char.isalnum() or char in '-_./:=+@%' for char in value):
+            return value
+        return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+    return ' '.join(quote(value) for value in arguments)
+
+
+def clean_owned(arguments, addition_file):
+    result = []
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument in ('--append-system-prompt', '--append-system-prompt-file'):
+            following = arguments[index + 1] if index + 1 < len(arguments) else ''
+            if following == str(addition_file) or CLAUDE_MARKER in following:
+                index += 2
+                continue
+        if CLAUDE_MARKER in argument:
+            index += 1
+            continue
+        result.append(argument)
+        index += 1
+    return result
+
+
+def restore_arguments(current, old, addition_file):
+    arguments = tokenize(current)
+    previous = tokenize(old.get('lastArgs', ''))
+    baseline = tokenize(old.get('baseArgs', ''))
+    matches = [
+        index
+        for index in range(len(arguments) - len(previous) + 1)
+        if previous and arguments[index:index + len(previous)] == previous
+    ]
+    if len(matches) == 1:
+        index = matches[0]
+        arguments[index:index + len(previous)] = baseline
+    else:
+        for control in old.get('controlArgs', []):
+            locations = [
+                index
+                for index in range(len(arguments) - len(control) + 1)
+                if arguments[index:index + len(control)] == control
+            ]
+            in_base = any(
+                baseline[index:index + len(control)] == control
+                for index in range(len(baseline) - len(control) + 1)
+            )
+            if len(locations) == 1 and not in_base:
+                index = locations[0]
+                arguments[index:index + len(control)] = old.get('controlBaseArgs', [])
+    arguments = clean_owned(arguments, addition_file)
+    if not arguments:
+        arguments = baseline
+    return arguments
+
+
+def clean_without_state(provider, addition_file):
+    config = provider.get('config')
+    if not isinstance(config, dict):
+        return False
+    current = config.get('launchArgs')
+    if not isinstance(current, str):
+        return False
+    arguments = tokenize(current)
+    cleaned = clean_owned(arguments, addition_file)
+    if cleaned == arguments:
+        return False
+    if cleaned:
+        config['launchArgs'] = join_args(cleaned)
+    else:
+        config.pop('launchArgs', None)
+    return True
+
+
+def restore_provider(settings, state, name, harness, instructions):
+    provider = (settings.get('providerInstances') or {}).get(name)
+    if not isinstance(provider, dict):
+        return False
+    addition_file = instructions / (harness + '.md')
+    record = (state.get('providers') or {}).get(name)
+    if not isinstance(record, dict):
+        return clean_without_state(provider, addition_file)
+    config = provider.get('config')
+    if not isinstance(config, dict):
+        return False
+    changed = False
+    current = config.get('launchArgs')
+    if isinstance(current, str):
+        if current == record.get('lastArgs'):
+            if record.get('hadArgs'):
+                config['launchArgs'] = record.get('baseArgs', '')
+            else:
+                config.pop('launchArgs', None)
+            changed = True
+        else:
+            restored = join_args(restore_arguments(current, record, addition_file))
+            if restored != current:
+                if restored:
+                    config['launchArgs'] = restored
+                else:
+                    config.pop('launchArgs', None)
+                changed = True
+    environment = provider.get('environment')
+    if environment is not None and environment == record.get('lastEnvironment'):
+        if record.get('hadEnvironment'):
+            provider['environment'] = copy.deepcopy(record.get('baseEnvironment') or [])
+        else:
+            provider.pop('environment', None)
+        changed = True
+    return changed
+
+
+def remove_claude_depth(settings):
+    provider = (settings.get('providerInstances') or {}).get('claudeAgent')
+    if not isinstance(provider, dict):
+        return False
+    environment = provider.get('environment')
+    if not isinstance(environment, list):
+        return False
+    kept = [
+        entry for entry in environment
+        if not (isinstance(entry, dict)
+                and entry.get('name') == CLAUDE_DEPTH
+                and entry.get('value') == ''
+                and entry.get('sensitive') is False)
+    ]
+    if len(kept) == len(environment):
+        return False
+    if kept:
+        provider['environment'] = kept
+    else:
+        provider.pop('environment', None)
+    return True
+
+
+def remove_hidden_models(client, models):
+    preferences = client.get('providerModelPreferences')
+    if not isinstance(preferences, dict):
+        return False
+    pi = preferences.get('pi')
+    if not isinstance(pi, dict):
+        return False
+    hidden = pi.get('hiddenModels')
+    if not isinstance(hidden, list):
+        return False
+    keep = [model for model in hidden if model not in models]
+    if keep == hidden:
+        return False
+    if keep:
+        pi['hiddenModels'] = keep
+    else:
+        pi.pop('hiddenModels', None)
+    if not pi:
+        preferences.pop('pi', None)
+    if not preferences:
+        client.pop('providerModelPreferences', None)
+    return True
+
+
+def merge(merger, settings, declared, label):
+    result = subprocess.run(
+        [merger, '--label', label, '--settings', str(settings), '--declared', str(declared)],
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip() or 'unknown error'
+        print('retire-t3: {}'.format(message), file=sys.stderr)
+        return False
+    return True
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    parser.add_argument('--home', required=True, type=Path)
+    parser.add_argument('--merger', required=True)
+    parser.add_argument('--settings-declaration', required=True)
+    parser.add_argument('--client-declaration', required=True)
+    parser.add_argument('--hidden-model', action='append', default=[])
+    args = parser.parse_args(argv)
+
+    userdata = args.home / '.t3' / 'userdata'
+    if not userdata.is_dir():
+        return 0
+    marker = userdata / MARKER
+    if marker.exists():
+        return 0
+
+    settings_path = userdata / 'settings.json'
+    client_path = userdata / 'client-settings.json'
+    state_path = userdata / 'dotfiles-launch-state.json'
+    instructions = userdata / 'instructions'
+    old_instructions = userdata.parent / 'instructions'
+    ledger = userdata / 't3code-settings-ownership.json'
+
+    try:
+        settings = load(settings_path) or {}
+        client = load(client_path) or {}
+        state = load(state_path)
+    except ValueError as error:
+        print('retire-t3: {}; leaving the state for a later generation apply'.format(error), file=sys.stderr)
+        return 0
+
+    changed_settings = False
+    changed_client = False
+    try:
+        if isinstance(state, dict):
+            changed_settings |= restore_provider(settings, state, 'claudeAgent', 'claude', instructions)
+            changed_settings |= restore_provider(settings, state, 'pi', 'pi', instructions)
+        changed_settings |= remove_claude_depth(settings)
+        changed_client |= remove_hidden_models(client, set(args.hidden_model))
+    except (ValueError, TypeError, KeyError, AttributeError) as error:
+        print('retire-t3: {}; leaving the state for a later generation apply'.format(error), file=sys.stderr)
+        return 0
+
+    try:
+        if changed_settings:
+            publish(settings_path, settings)
+        if changed_client:
+            publish(client_path, client)
+        if settings_path.is_file() and not merge(
+            args.merger, settings_path, args.settings_declaration, 'T3 Code retirement'
+        ):
+            return 0
+        if client_path.is_file() and not merge(
+            args.merger, client_path, args.client_declaration, 'T3 Code retirement'
+        ):
+            return 0
+        for name in INSTRUCTION_FILES:
+            (instructions / name).unlink(missing_ok=True)
+        (old_instructions / 'claude-code' / 'CLAUDE.md').unlink(missing_ok=True)
+        for directory in (instructions, old_instructions / 'claude-code', old_instructions):
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+        ledger.unlink(missing_ok=True)
+        state_path.unlink(missing_ok=True)
+        marker.write_text('T3 Code repository settings retired.\n', encoding='utf-8')
+        os.chmod(marker, 0o600)
+    except OSError as error:
+        print('retire-t3: {}; leaving the marker absent'.format(error), file=sys.stderr)
+        return 0
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

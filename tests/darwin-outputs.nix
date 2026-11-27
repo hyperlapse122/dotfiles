@@ -207,7 +207,6 @@ let
       generation = user.home.activationPackage;
       state = user.my.secrets.stateDir;
       system = entry.host.system;
-      t3Desktop = lib.findFirst (p: (p.pname or "") == "t3code-desktop") null user.home.packages;
       production = if entry.bootstrap then "0" else "1";
       expectedCasks = lib.sort lib.lessThan (
         lib.filter (cask: !entry.bootstrap || cask != "ollama-app") mapping.casks
@@ -216,9 +215,6 @@ let
       androidSdkRoot = "${config.my.user.home}/Library/Android/sdk";
       masExe = lib.getExe entry.host.pkgs.mas;
       peers = lib.concatStringsSep "," (expectedPeers user.home.packages);
-      serveHtmlPackage =
-        (import ../packages/agent-tools.nix { inherit (entry.host) pkgs; }).serveHtml or null;
-      serveHtml = lib.optionalString (serveHtmlPackage != null) (lib.getExe serveHtmlPackage);
       acpx = lib.getExe (import ../packages/acpx.nix { inherit (entry.host) pkgs; });
       # Only these four Dock keys may be written; the rest stay the user's.
       expectedDock = pkgs.writeText "expected-dock.json" (
@@ -332,11 +328,6 @@ let
         *'launchctlsetenvCROSS_MODEL_PEERS${peers}/bin/launchctlsetenvCROSS_MODEL_MAX_PEERS2'*'<key>RunAtLoad</key><true/>'*) ;;
         *) bad "no login agent sets CROSS_MODEL_PEERS to ${peers} and CROSS_MODEL_MAX_PEERS to 2 for GUI apps" ;;
       esac
-      waiveragent=$(agent claude-rm-waiver)
-      case $waiveragent in
-        *'exec/bin/launchctlsetenvCLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS1</string></array>'*'<key>RunAtLoad</key><true/>'*) ;;
-        *) bad "no login agent sets CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS to 1 for GUI apps" ;;
-      esac
       [ -z "$(agent minikube)" ] || bad "minikube agent reached Darwin"
       [ -x "$gen/home-path/bin/kubectl" ] && [ -x "$gen/home-path/bin/minikube" ] || bad "Kubernetes clients missing"
 
@@ -406,12 +397,6 @@ let
       esac
 
 
-      if [ -z ${lib.escapeShellArg serveHtml} ]; then
-        bad "packages/agent-tools.nix exports no serveHtml"
-      elif [ "$(readlink -f "$gen/home-path/bin/serve-html" || true)" != ${lib.escapeShellArg serveHtml} ]; then
-        bad "serve-html on PATH is not the packaged helper"
-      fi
-
       [ "$(readlink -f "$gen/home-path/bin/acpx" || true)" = ${lib.escapeShellArg acpx} ] \
         || bad "acpx on PATH is not the packaged binary"
 
@@ -425,7 +410,7 @@ let
       grep -q 'Library/Application Support/VSCodium/User/settings.json' "$gen/activate" \
         || bad "the VSCodium settings merge does not target Application Support"
 
-      # The paths T3 Code's device hub requires under the SDK root.
+      # The paths the Android device hub requires under the SDK root.
       sdk=$gen/home-files/Library/Android/sdk
       [ -x "$sdk/cmdline-tools/latest/bin/avdmanager" ] \
         || bad "the Android SDK has no cmdline-tools/latest/bin/avdmanager"
@@ -434,7 +419,7 @@ let
         [ -f "$sdk/system-images/android-$api/google_apis/arm64-v8a/system.img" ] \
           || bad "the Android SDK has no arm64-v8a Google APIs system.img for API $api"
       done
-      # A Dock-launched T3 Code starts the emulator with no SDK variables set.
+      # A Dock-launched emulator starts with no SDK variables set.
       emulator=$sdk/emulator/emulator
       if ! grep -qsxF 'export ANDROID_HOME="''${ANDROID_HOME:-$HOME/Library/Android/sdk}"' "$emulator" \
         || ! grep -qsxF 'export ANDROID_SDK_ROOT="''${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}"' "$emulator"; then
@@ -480,20 +465,6 @@ let
           bad "the mobile-devices helper call lacks a --java-home whose bin/java runs: ''${javahome:-none}"
         fi
       fi
-
-      ${lib.optionalString (t3Desktop != null) ''
-        app=${t3Desktop}/Applications/'${import ../packages/t3code-app-bundle.nix}'
-        if [ ! -d "$app" ]; then
-          bad "the T3 Code app bundle is missing"
-        else
-          exe=$(/usr/bin/plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist" 2>/dev/null \
-            || sed -n '/CFBundleExecutable/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' "$app/Contents/Info.plist")
-          unzip -p ${t3Desktop.src} "${import ../packages/t3code-app-bundle.nix}/Contents/MacOS/$exe" | cmp -s - "$app/Contents/MacOS/$exe" \
-            || bad "the T3 Code main executable differs from the release zip's, so its signature is broken"
-        fi
-        grep -qs T3CODE_DISABLE_AUTO_UPDATE "$gen/LaunchAgents/org.nix-community.home.t3code-disable-auto-update.plist" \
-          || bad "no launch agent sets T3CODE_DISABLE_AUTO_UPDATE"
-      ''}
 
       # The TLS inspection CA trait, on in the fixture: production points
       # shells, nix-daemon, and GUI apps at one bundle; bootstrap keeps the

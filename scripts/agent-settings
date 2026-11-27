@@ -74,10 +74,6 @@ The declared document is a JSON object with these fields:
   hookGroups {identity: {statusMessage, commandPrefix, commandSuffix},
               events: {event: group | {}}}
                                     Reconcile managed native JSON hook groups.
-  migrateInstances {from: name, to: name, kinds: [name]}
-                                    T3 Code's move of a retired per-kind
-                                    block into provider instances, run before
-                                    the rest.
 
 `own` is for a top-level key nobody else writes -- a named entry beside the
 ones the agent or another tool maintains -- so replacing its whole value
@@ -153,7 +149,7 @@ def private_directory(path):
 ANY_VALUE = object()
 
 FIELDS = {'set', 'remove', 'setPaths', 'removePaths', 'removeEntries', 'upsertPaths', 'prefixEntries', 'own',
-          'ownEntries', 'migrateInstances', 'hookGroups'}
+          'ownEntries', 'hookGroups'}
 
 
 def describe(path):
@@ -175,8 +171,7 @@ def strings(value):
 
 
 def declaration(declared, fmt='json'):
-    """Parse the rendered declaration into (assign, retire, paths, removals, owned, upserts, prefixes, migration, drops,
-    entry_sets, hook_groups).
+    """Parse the rendered declaration into its tables.
 
     `remove` is how a key leaves the declared set.  Dropping it from `set`
     alone would leave its last written value on every machine forever, because
@@ -224,7 +219,6 @@ def declaration(declared, fmt='json'):
                             removals, declared)
     entry_sets = owned_entry_sets(document.get('ownEntries', []), assign, retire, owned, paths, upserts, prefixes,
                                   removals, drops, declared)
-    migration = instance_migration(document.get('migrateInstances'), assign, retire, owned, declared)
     hook_groups = document.get('hookGroups')
     if hook_groups is not None:
         if (fmt != 'json' or not isinstance(hook_groups, dict)
@@ -249,7 +243,7 @@ def declaration(declared, fmt='json'):
                        | {describe(entry_set.path) for entry_set in entry_sets if holds_null(entry_set.entries)})
         if nulls:
             raise ValueError('TOML cannot hold a declared null: {}'.format(', '.join(nulls)))
-    return assign, retire, paths, removals, owned, upserts, prefixes, migration, drops, entry_sets, hook_groups
+    return assign, retire, paths, removals, owned, upserts, prefixes, drops, entry_sets, hook_groups
 
 
 def check_path(path, declared):
@@ -456,63 +450,6 @@ def entry_ids(key, entries):
     return list(entries) if key is None else [value[key] for value in entries]
 
 
-def instance_migration(entry, assign, retire, owned, declared):
-    if entry is None:
-        return None
-    required = {'from', 'to', 'kinds'}
-    if (not isinstance(entry, dict) or not required <= set(entry) <= required
-            or not isinstance(entry['from'], str) or not isinstance(entry['to'], str)
-            or entry['from'] == entry['to']
-            or not isinstance(entry['kinds'], list)
-            or any(not isinstance(kind, str) for kind in entry['kinds'])):
-        raise ValueError('declared "migrateInstances" is not {{from, to, kinds}}: {}'.format(declared))
-    # The migration rewrites both keys, so another top-level declaration on
-    # either would fight it.
-    for name in (entry['from'], entry['to']):
-        if name in assign or name in retire or name in owned:
-            raise ValueError('migrated key is also set, removed, or owned: {}'.format(name))
-    return entry['from'], entry['to'], entry['kinds']
-
-
-def migrate(merged, migration):
-    """Move each listed kind out of the retired per-kind block, as T3 Code does.
-
-    T3 Code moves providers.<kind> into providerInstances.<kind> once, on
-    load, and only into an instance that does not exist yet.  The declaration
-    creates those instances, so without this step the next load would find
-    them present and the user's legacy fields would be dropped unread.  The
-    shape mirrors the pinned T3 Code's migrateLegacyProviderSettings:
-    `enabled` stays on the instance, every other field goes under `config`,
-    and an empty block makes no instance.  Kinds the declaration does not
-    list stay in the block for T3 Code to migrate itself.
-    """
-    if migration is None:
-        return
-    source, target, kinds = migration
-    legacy = merged.get(source)
-    if not isinstance(legacy, dict):
-        return
-    for kind in kinds:
-        blob = legacy.get(kind)
-        if not isinstance(blob, dict):
-            continue
-        instances = merged.setdefault(target, {})
-        if not isinstance(instances, dict):
-            raise ValueError('{} is not an object, so {} cannot be migrated into it'.format(
-                describe([target]), describe([source, kind])))
-        config = {name: value for name, value in blob.items() if name != 'enabled'}
-        enabled = blob.get('enabled')
-        if kind not in instances and (config or isinstance(enabled, bool)):
-            instance = {'driver': kind}
-            if isinstance(enabled, bool):
-                instance['enabled'] = enabled
-            instance['config'] = config
-            instances[kind] = instance
-        del legacy[kind]
-    if not legacy:
-        del merged[source]
-
-
 def upsert(entries, key, value):
     """Replace the entry of `entries` named value[key], else append value.
 
@@ -582,7 +519,7 @@ def reconcile_hook_groups(settings, specification):
         settings['hooks'] = hooks
 
 
-def apply(current, assign, retire, paths, owned=None, upserts=None, migration=None, prefixes=None,
+def apply(current, assign, retire, paths, owned=None, upserts=None, prefixes=None,
           removals=None, drops=None, entry_sets=None, hook_groups=None):
     """Return `current` with the declaration applied, leaving `current` alone.
 
@@ -597,7 +534,6 @@ def apply(current, assign, retire, paths, owned=None, upserts=None, migration=No
     path owned before this apply, as merge() read them from the ledger.
     """
     merged = copy.deepcopy(current)
-    migrate(merged, migration)
     merged.update(assign)
     # A copy, so a later edit to the result never reaches the declaration.
     merged.update(copy.deepcopy(owned or {}))
@@ -935,7 +871,7 @@ def record(ledger, text):
 
 
 def merge(settings, declared, fmt='json', ledger=None):
-    (assign, retire, paths, removals, owned, upserts, prefixes, migration, drops,
+    (assign, retire, paths, removals, owned, upserts, prefixes, drops,
      entry_sets, hook_groups) = declaration(declared, fmt)
     migrations = {removal.migration for removal in removals if removal.migration is not None}
     keeps_ledger = bool(entry_sets or migrations)
@@ -952,7 +888,7 @@ def merge(settings, declared, fmt='json', ledger=None):
     # own snapshot, and reusing this one would break that pairing and let a
     # concurrent write be overwritten.
     apply(read(settings), assign=assign, retire=retire, paths=paths, owned=owned,
-          upserts=upserts, migration=migration, prefixes=prefixes, removals=removals, drops=drops,
+          upserts=upserts, prefixes=prefixes, removals=removals, drops=drops,
           entry_sets=entry_sets, hook_groups=hook_groups)
     private_directory(settings.parent)
     with settings_lock(settings):
@@ -969,7 +905,7 @@ def merge(settings, declared, fmt='json', ledger=None):
             before = snapshot(settings)
             current = read(settings)
             merged = apply(current, assign=assign, retire=retire, paths=paths, owned=owned,
-                           upserts=upserts, migration=migration, prefixes=prefixes, removals=removals,
+                           upserts=upserts, prefixes=prefixes, removals=removals,
                            drops=drops, entry_sets=entry_sets, hook_groups=hook_groups)
             if merged == current and before is not None:
                 try:

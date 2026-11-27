@@ -5,7 +5,7 @@
 # under the same attribute as a shared one, stays on the system.
 #
 #   hostFacts = import ./lib/host-facts.nix { inherit lib; };
-#   hostFacts.of config.my  -> { bootstrap, hostName, kind, user, t3, ... }
+#   hostFacts.of config.my  -> { bootstrap, hostName, kind, user, ... }
 { lib }:
 let
   declared = (import ../modules/shared/host.nix { inherit lib; }).options.my;

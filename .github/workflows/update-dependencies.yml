@@ -251,20 +251,6 @@ jobs:
           # 6. Update mise
           nix run .#mise-release -- --output packages/mise-release.json
 
-          # 7. Update T3 Code. A release can be published before its assets
-          # and digests are, so a failure here keeps the current pin and lets
-          # the other updates through, with the updater's message in the warning.
-          t3code_status=0
-          t3code_log=$(mktemp)
-          nix run .#t3code-release -- --output packages/t3code-release.json 2>"$t3code_log" || t3code_status=$?
-          cat "$t3code_log" >&2
-          t3code_message=$(tail -n 1 "$t3code_log")
-          rm -f "$t3code_log"
-          if [ "$t3code_status" -ne 0 ]; then
-            echo "::warning title=T3 Code update skipped::t3code-release failed; keeping the current pin in packages/t3code-release.json. $t3code_message"
-            git checkout -- packages/t3code-release.json
-          fi
-
           # 9. Update Pi
           update_harness_release pi Pi packages/pi-release.json
 
@@ -329,7 +315,6 @@ jobs:
           if [ -n "$(git status --porcelain -- packages/acpx-release.json packages/acpx/package-lock.json)" ]; then
             commit_version acpx packages/acpx-release.json packages/acpx/package-lock.json
           fi
-          commit_if_pin_changed t3code packages/t3code-release.json
           commit_if_pin_changed opencode packages/opencode-release.json
           commit_if_pin_changed ant packages/ant-release.json
           commit_if_pin_changed mise packages/mise-release.json

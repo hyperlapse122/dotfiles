@@ -24,7 +24,7 @@ let
     CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
     CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS = "20";
     CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH = "1";
-    # Lets a bypass-permissions (T3 Code full access) session run a command
+    # Lets a bypass-permissions (full access) session run a command
     # that trips the dangerous-rm check without an approval prompt. Claude
     # Code ignores it whenever any PermissionRequest hook or Bash, Edit, or
     # Read deny or ask rule exists, so one left in ~/.claude/settings.json or
@@ -58,7 +58,7 @@ let
     # A rebuild resets these three to their declared values, so a /model,
     # /effort, or advisor choice made in a session lasts until the next
     # switch. The [1m] suffix selects the 1M-token context window, so the
-    # window is declared too. T3 Code's Claude sessions read this user
+    # window is declared too. GUI and CLI Claude sessions read this user
     # settings file, so they get the same advisor.
     model = "opus[1m]";
     effortLevel = "medium";
@@ -185,21 +185,6 @@ in
     // lib.optionalAttrs streamTimeoutEnabled {
       CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS = "60000";
     };
-
-  # Finder and Dock launches never read hm-session-vars.sh, so a T3 Code
-  # launched from them gets the dangerous-rm waiver from launchd instead.
-  launchd.agents.claude-rm-waiver = lib.mkIf (config.my.kind == "darwin") {
-    enable = true;
-    config = {
-      ProgramArguments = [
-        "/bin/launchctl"
-        "setenv"
-        "CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS"
-        environmentTier.CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS
-      ];
-      RunAtLoad = true;
-    };
-  };
 
   # Finder and Dock launches inherit launchd's environment, not shell exports.
   launchd.agents.claude-stream-timeout = lib.mkIf streamTimeoutEnabled {

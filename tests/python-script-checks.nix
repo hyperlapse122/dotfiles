@@ -5,9 +5,10 @@ let
       setup ? "",
       modules ? [ ],
       nativeBuildInputs ? [ ],
+      python ? pkgs.python3,
     }:
     name: script: test:
-    pkgs.runCommand "${name}-tests" { nativeBuildInputs = [ pkgs.python3 ] ++ nativeBuildInputs; } ''
+    pkgs.runCommand "${name}-tests" { nativeBuildInputs = [ python ] ++ nativeBuildInputs; } ''
       export PYTHONDONTWRITEBYTECODE=1
       mkdir -p scripts tests
       cp ${script} scripts/${baseNameOf script}${
@@ -33,7 +34,10 @@ in
         (import ../packages/gpg-tools.nix { inherit pkgs; }).restoreAgeIdentity
       }/bin/restore-age-identity"
       ./restore-age-identity.py;
-  serve-html = pythonScriptCheck "serve-html" ../scripts/serve-html ./test_serve_html.py;
+  retire-t3 = pythonScriptCheckWith {
+    python = (import ../packages/agent-tools.nix { inherit pkgs; }).agentSettingsPython;
+    modules = [ ../scripts/agent-settings ];
+  } "retire-t3" ../scripts/retire-t3 ./test_retire_t3.py;
   overlay-release =
     pythonScriptCheck "overlay-release" ../scripts/overlay-release
       ./test_overlay_release.py;
@@ -66,9 +70,6 @@ in
     pythonScriptCheck "opencode-serving-model" ../scripts/opencode-serving-model
       ./test_opencode_serving_model.py;
   npm-release = releaseScriptCheck "npm-release" ../scripts/npm-release ./test_npm_release.py;
-  t3code-release =
-    pythonScriptCheck "t3code-release" ../scripts/t3code-release
-      ./test_t3code_release.py;
   synthetic-models-watch =
     let
       realSource = pkgs.writeText "synthetic-models.json" (

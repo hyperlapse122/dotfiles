@@ -11,7 +11,7 @@
 #   role runs at. An entry no consumer reads a role from carries
 #   `roles = { }`. These models offer no `medium` effort.
 # - `defaultEffort`: the preferred reasoning effort monitored for catalog
-#   drift; it does not set T3's startup selection.
+#   drift; it does not set a startup selection.
 #
 # The DeepSeek `id` pins one dated build and moves only when the user changes
 # it after a reconcile issue reports a newer one.
@@ -28,10 +28,7 @@
     id = "hf:zai-org/GLM-5.3-Flash";
     family = "glm";
     lineage = "hf:zai-org/GLM-([0-9]+([.][0-9]+)?)-Flash";
-    # T3 Code's fallback selection (home/h82/t3code.nix).
-    roles = {
-      t3-fallback = "high";
-    };
+    roles = { };
     defaultEffort = "high";
   };
 
