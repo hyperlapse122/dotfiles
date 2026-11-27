@@ -29,16 +29,12 @@ in
   overlay-release = pkgs.writeScriptBin "overlay-release" (
     "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../scripts/overlay-release
   );
-  pi-release = agentTools.piRelease;
-  pi = import ./pi.nix { inherit pkgs; };
   opencode-release = agentTools.opencodeRelease;
   opencode = import ./opencode.nix { inherit pkgs; };
   omp-release = agentTools.ompRelease;
   npm-release = agentTools.npmRelease;
   acpx = import ./acpx.nix { inherit pkgs; };
   tanstack-intent = import ./tanstack-intent.nix { inherit pkgs; };
-  synthetic-models-watch = agentTools.syntheticModelsWatch;
   opencode-go-models-watch = agentTools.opencodeGoModelsWatch;
-  provider-models-watch = agentTools.providerModelsWatch;
   android-sdk-release = agentTools.androidSdkRelease;
 }

@@ -47,7 +47,6 @@ let
     nixos-wired-network-config = import ./nixos-wired-network-config.nix { inherit pkgs self; };
     nvidia-closure = import ./nvidia-closure.nix { inherit pkgs self; };
     official-skills = import ./official-skills.nix { inherit pkgs self; };
-    pi = import ./pi.nix { inherit pkgs self; };
     pinned-skills = import ./pinned-skills.nix { inherit pkgs self; };
     podman-containers = import ./podman-containers.nix { inherit pkgs self; };
     printing = import ./printing.nix { inherit pkgs self; };
@@ -75,7 +74,7 @@ let
   checks =
     sharedChecks
     // import ./python-script-checks.nix { inherit pkgs; }
-    // import ./workflow-checks.nix { inherit pkgs self agentTools; }
+    // import ./workflow-checks.nix { inherit pkgs self; }
     // import ./shell-script-checks.nix {
       inherit
         pkgs
@@ -121,7 +120,6 @@ let
       opencode = import ./opencode.nix { inherit pkgs self; };
       plasma-taskbar = import ./plasma-taskbar.nix { inherit pkgs self; };
       sops-recipients = import ./sops-recipients.nix { inherit pkgs self; };
-      synthetic-models = import ./synthetic-models.nix { inherit pkgs; };
       tailscale-single-router = import ./tailscale-single-router.nix { inherit pkgs configurations; };
       text-template = import ./text-template.nix { inherit pkgs; };
       tls-inspection-ca = import ./tls-inspection-ca.nix { inherit pkgs; };

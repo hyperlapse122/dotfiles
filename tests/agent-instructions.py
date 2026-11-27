@@ -9,7 +9,7 @@ import sys
 import tempfile
 
 DELIVERIES = {'claude': '.claude/CLAUDE.md',
-              'pi': '.pi/agent/AGENTS.md', 'opencode': '.config/opencode/AGENTS.md',
+              'opencode': '.config/opencode/AGENTS.md',
               'omp': '.omp/agent/AGENTS.md'}
 TASK_GUIDE = 'task-guide.md'
 

@@ -2128,5 +2128,69 @@ merge(Path(sys.argv[2]), Path(sys.argv[3]), ledger=Path(sys.argv[4]))
                 self.assertEqual(self.read(), OWN_EXISTING)
 
 
+
+RETIRED_HOOKS = {
+    'identity': {
+        'statusMessage': 'Dotfiles agent quality',
+        'commandPrefix': '/nix/store/',
+        'commandSuffix': '-agent-quality-hook/bin/agent-quality-hook',
+    },
+    'events': {'PreToolUse': {}, 'PostToolUse': {}, 'Stop': {}},
+}
+MANAGED_HANDLER = {
+    'type': 'command',
+    'command': '/nix/store/0000-agent-quality-hook/bin/agent-quality-hook policy claude pre',
+    'statusMessage': 'Dotfiles agent quality',
+}
+OWNER_HANDLER = {'type': 'command', 'command': '/home/owner/bin/my-hook'}
+
+
+class RetiredHookGroupTests(unittest.TestCase):
+    def test_empty_events_remove_the_managed_group_and_keep_the_owner_group(self):
+        current = {'hooks': {'PreToolUse': [
+            {'matcher': '^(Edit|Write|MultiEdit|Bash)$', 'hooks': [MANAGED_HANDLER]},
+            {'matcher': 'Bash', 'hooks': [OWNER_HANDLER]},
+        ]}}
+        merged = merger.apply(current, {}, [], [], hook_groups=RETIRED_HOOKS)
+        self.assertEqual(merged['hooks'], {'PreToolUse': [
+            {'matcher': 'Bash', 'hooks': [OWNER_HANDLER]},
+        ]})
+
+    def test_empty_events_keep_an_owner_handler_added_to_the_managed_group(self):
+        current = {'hooks': {'PreToolUse': [
+            {'matcher': 'Bash', 'hooks': [MANAGED_HANDLER, OWNER_HANDLER]},
+        ]}}
+        merged = merger.apply(current, {}, [], [], hook_groups=RETIRED_HOOKS)
+        self.assertEqual(merged['hooks'], {'PreToolUse': [
+            {'matcher': 'Bash', 'hooks': [OWNER_HANDLER]},
+        ]})
+
+    def test_empty_events_add_no_hooks_to_settings_without_hooks(self):
+        merged = merger.apply({'theme': 'auto'}, {}, [], [], hook_groups=RETIRED_HOOKS)
+        self.assertEqual(merged, {'theme': 'auto'})
+
+
+
+class EmptyEntrySetTests(unittest.TestCase):
+    PATH = ['providers', 'synthetic', 'models']
+
+    def test_an_empty_set_leaves_a_missing_path_absent(self):
+        current = {'theme': 'auto', 'providers': {'opencode-go': {'models': {'kept': {}}}}}
+        merged = merger.apply(current, {}, [], [], entry_sets=[(self.PATH, None, {}, [])])
+        self.assertEqual(merged, current)
+
+    def test_an_empty_set_removes_only_previously_owned_entries(self):
+        current = {'providers': {'synthetic': {'models': {
+            'hf:owned': {'name': 'Owned'},
+            'hf:hidden': {'disabled': True},
+            'my-own-model': {'name': 'Mine'},
+        }}}}
+        merged = merger.apply(current, {}, [], [],
+                              entry_sets=[(self.PATH, None, {}, ['hf:owned', 'hf:hidden'])])
+        self.assertEqual(merged, {'providers': {'synthetic': {'models': {
+            'my-own-model': {'name': 'Mine'},
+        }}}})
+
+
 if __name__ == '__main__':
     unittest.main()

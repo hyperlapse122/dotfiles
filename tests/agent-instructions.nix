@@ -27,7 +27,6 @@ let
   fakeKey = "0123456789ABCDEF0123456789ABCDEF01234567";
   deliveryPaths = [
     ".claude/CLAUDE.md"
-    ".pi/agent/AGENTS.md"
     ".config/opencode/AGENTS.md"
     ".omp/agent/AGENTS.md"
   ];
@@ -36,6 +35,7 @@ let
     ".local/share/nix-config/agent-instructions/task-guide.md"
     ".local/share/nix-config/agent-instructions/t3-guide.md"
     ".codex/AGENTS.md"
+    ".pi/agent/AGENTS.md"
     ".gemini/config/rules"
     ".grok/AGENTS.md"
     ".grok/rules/instructions.md"

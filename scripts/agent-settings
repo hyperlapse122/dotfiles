@@ -551,6 +551,10 @@ def apply(current, assign, retire, paths, owned=None, upserts=None, prefixes=Non
             raise ValueError('{} is not a list, so {} cannot be upserted'.format(describe(path), describe(value)))
         upsert(entries, key, value)
     for path, key, declared, previous in entry_sets or []:
+        # A set declared empty only clears what an earlier apply wrote, so it
+        # must not create its path where nothing was ever written.
+        if not declared and not has_path(merged, path):
+            continue
         node = parent_of(merged, path)
         if path[-1] not in node:
             node[path[-1]] = {} if key is None else []
@@ -641,6 +645,15 @@ def apply(current, assign, retire, paths, owned=None, upserts=None, prefixes=Non
     if hook_groups is not None:
         reconcile_hook_groups(merged, hook_groups)
     return merged
+
+
+def has_path(merged, path):
+    node = merged
+    for key in path:
+        if not isinstance(node, dict) or key not in node:
+            return False
+        node = node[key]
+    return True
 
 
 def parent_of(merged, path):

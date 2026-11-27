@@ -6,10 +6,6 @@
 }:
 let
   ollama = config.services.ollama.package;
-  provision = import ../../../packages/ollama-provision.nix {
-    inherit pkgs;
-    kind = "nixos";
-  };
 in
 {
   config = lib.mkIf (!config.my.bootstrap) {
@@ -37,22 +33,5 @@ in
       };
     };
 
-    systemd.user.services.ollama-provision = {
-      description = "Provision the local Pi model";
-      wantedBy = [ "default.target" ];
-      after = [ "ollama.service" ];
-      unitConfig = {
-        ConditionUser = config.my.user.name;
-        # A model pull can take minutes; default.target must not wait for it.
-        DefaultDependencies = false;
-        StartLimitIntervalSec = 0;
-      };
-      serviceConfig = {
-        Type = "oneshot";
-        ExecStart = lib.getExe provision;
-        Restart = "on-failure";
-        RestartSec = 30;
-      };
-    };
   };
 }

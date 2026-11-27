@@ -138,6 +138,9 @@ if os.environ['ACTIVATION_MODE'] == 'settings':
             assert_types(value, row['value'])
             assert value == row['value'], 'activation did not reassert nested setting'
         for row in expected_entries:
+            if not row['entries']:
+                # An empty owned set only clears earlier rows; it reasserts nothing.
+                continue
             entries = value_at(actual, row['path'])
             for key, value in row['entries'].items():
                 assert_types(entries[key], value)

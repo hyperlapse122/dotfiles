@@ -138,7 +138,7 @@ let
 
   roots = [
     ".claude/skills"
-    ".pi/agent/skills"
+    ".omp/agent/skills"
     ".config/opencode/skills"
   ];
 

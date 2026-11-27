@@ -12,13 +12,14 @@ let
     import json, os, plistlib, subprocess, sys, tempfile
     from pathlib import Path
 
-    generation, original, enabled, provision = Path(sys.argv[1]), sys.argv[2], sys.argv[3] == "1", sys.argv[4]
+    generation, original, enabled = Path(sys.argv[1]), sys.argv[2], sys.argv[3] == "1"
     body = (generation / "activate").read_text()
     note = '_iNote "Activating %s" "ollamaSettings"\n'
     agents = generation / "LaunchAgents"
-    paths = [agents / f"org.nix-community.home.ollama-{name}.plist" for name in ("bootstrap", "provision")]
+    paths = [agents / "org.nix-community.home.ollama-bootstrap.plist"]
     assert (note in body) == enabled
     assert all(path.exists() == enabled for path in paths)
+    assert not (agents / "org.nix-community.home.ollama-provision.plist").exists()
     if enabled:
         assert body.index(note) < body.index('_iNote "Activating %s" "setupLaunchAgents"\n')
         plists = [plistlib.loads(path.read_bytes()) for path in paths]
@@ -31,7 +32,6 @@ let
             prefix = "/bin/wait4path /nix/store && exec "
             assert [shell, flag] == ["/bin/sh", "-c"] and command.startswith(prefix)
             return Path(command.removeprefix(prefix))
-        assert launch_executable(plists[1]) == Path(provision)
         step = body.split(note, 1)[1].split('_iNote "Activating %s"', 1)[0]
         with tempfile.TemporaryDirectory() as scratch:
             root = Path(scratch)
@@ -122,7 +122,6 @@ let
         }
       )
       [
-        ./pi.nix
         ./claude.nix
         ./agent-plugins.nix
         ./korean-skills.nix
@@ -297,7 +296,7 @@ let
           lib.escapeShellArgs (
             map (root: "--root ${lib.escapeShellArg "${user.home.homeDirectory}/${root}"}") [
               ".claude/skills"
-              ".pi/agent/skills"
+              ".omp/agent/skills"
               ".config/opencode/skills"
             ]
           )
@@ -517,16 +516,7 @@ let
       # bootstrap has neither.
       nrdaemon=$sys/Library/LaunchDaemons/org.nixos.network-recovery.plist
       python3 ${streamTimeoutEffects} "$gen" "$production" || bad "Claude GUI timeout lifecycle failed"
-      python3 ${ollamaEffects} "$gen" ${lib.escapeShellArg user.home.homeDirectory} "$production" ${
-        lib.escapeShellArg (
-          lib.getExe (
-            import ../packages/ollama-provision.nix {
-              inherit pkgs;
-              kind = "darwin";
-            }
-          )
-        )
-      } || bad "Ollama setup lifecycle failed"
+      python3 ${ollamaEffects} "$gen" ${lib.escapeShellArg user.home.homeDirectory} "$production" || bad "Ollama setup lifecycle failed"
       nrrotate=$sys/etc/newsyslog.d/network-recovery.conf
       if [ "$production" = 1 ]; then
         nrarg() { /usr/bin/plutil -extract "$1" raw "$nrdaemon" 2>/dev/null || true; }

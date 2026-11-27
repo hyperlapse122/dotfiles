@@ -129,24 +129,24 @@ in
     enableSyntheticApiKey = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Decrypt synthetic_api_key for Pi's key helper, which reads it at run time.";
+      description = "Decrypt synthetic_api_key for OpenCode and omp, whose activations import it into their credential stores.";
     };
     enableExaApiKey = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Decrypt exa_api_key for Pi's Exa web tools, which read it at run time.";
+      description = "Decrypt exa_api_key for omp, whose activation imports it into omp's credential store.";
     };
     enableOpenRouterApiKey = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Decrypt openrouter_api_key for Pi's OpenRouter provider, which reads it at run time.";
+      description = "Decrypt openrouter_api_key for omp and decide, which import or read it.";
     };
     enableOpencodeGoApiKey = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Decrypt opencode_go_api_key for OpenCode's OpenCode Go provider, which activation imports into OpenCode's credential store.";
+      description = "Decrypt opencode_go_api_key for the OpenCode Go provider, which OpenCode and omp activations import into their credential stores.";
     };
-    enableAnthropicApiKey = lib.mkEnableOption "decryption of the Anthropic API key for OpenCode";
+    enableAnthropicApiKey = lib.mkEnableOption "decryption of the Anthropic API key for OpenCode and omp";
     ompPackage = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
       default = null;

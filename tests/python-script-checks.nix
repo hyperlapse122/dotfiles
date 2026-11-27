@@ -41,7 +41,6 @@ in
   overlay-release =
     pythonScriptCheck "overlay-release" ../scripts/overlay-release
       ./test_overlay_release.py;
-  pi-release = releaseScriptCheck "pi-release" ../scripts/pi-release ./test_pi_release.py;
   agent-plugin-sync =
     pythonScriptCheck "agent-plugin-sync" ../scripts/agent-plugin-sync
       ./test_agent_plugin_sync.py;
@@ -70,22 +69,6 @@ in
     pythonScriptCheck "opencode-serving-model" ../scripts/opencode-serving-model
       ./test_opencode_serving_model.py;
   npm-release = releaseScriptCheck "npm-release" ../scripts/npm-release ./test_npm_release.py;
-  synthetic-models-watch =
-    let
-      realSource = pkgs.writeText "synthetic-models.json" (
-        builtins.toJSON (import ../home/h82/agents/synthetic-models.nix)
-      );
-    in
-    pythonScriptCheckWith {
-      modules = [ ../scripts/catalog_snapshot.py ];
-      # The real source must match the snapshot, and the tests read it,
-      # never a copy that can drift.
-      setup = ''
-        mkdir -p tests/fixtures
-        cp -r ${./fixtures/synthetic-models} tests/fixtures/synthetic-models
-        export SYNTHETIC_MODELS_SOURCE_JSON=${realSource}
-      '';
-    } "synthetic-models-watch" ../scripts/synthetic-models-watch ./test_synthetic_models_watch.py;
   opencode-go-models-watch = pythonScriptCheckWith {
     modules = [ ../scripts/catalog_snapshot.py ];
     setup = ''
@@ -93,13 +76,6 @@ in
       cp ${../home/h82/agents/opencode-go-catalog.json} home/h82/agents/opencode-go-catalog.json
     '';
   } "opencode-go-models-watch" ../scripts/opencode-go-models-watch ./test_opencode_go_models_watch.py;
-  provider-models-watch = pythonScriptCheckWith {
-    modules = [ ../scripts/catalog_snapshot.py ];
-    setup = ''
-      mkdir -p home/h82/agents
-      cp ${../home/h82/agents/anthropic-models.json} home/h82/agents/anthropic-models.json
-    '';
-  } "provider-models-watch" ../scripts/provider-models-watch ./test_provider_models_watch.py;
   # Drives the packaged helper, so a package that lost nokogiri from its
   # interpreter fails here rather than in the update workflow.
   publish-cli-auth =

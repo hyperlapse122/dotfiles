@@ -1,7 +1,6 @@
 {
   pkgs,
   self,
-  agentTools,
 }:
 {
   update-dependencies-reconcile =
@@ -27,13 +26,6 @@
           ${../scripts/ci-update-publish} \
           ${../scripts/ci-update-verify} \
           ${./update-workflow.py}
-        bash ${./synthetic-models-reconcile.sh} \
-          ${../.github/workflows/update-dependencies.yml} \
-          ${agentTools.syntheticModelsWatch}/libexec/synthetic-models-watch/synthetic-models-watch \
-          ${./fixtures/synthetic-models/catalog-2026-10-21.json} \
-          ${pkgs.writeText "synthetic-models.json" (
-            builtins.toJSON (import ../home/h82/agents/synthetic-models.nix)
-          )}
         touch $out
       '';
   ci-workflow-docs-skip =

@@ -9,10 +9,6 @@ let
   declared = pkgs.writeText "ollama-server-settings.json" (
     builtins.toJSON { set.disable_ollama_cloud = true; }
   );
-  provision = import ../../../packages/ollama-provision.nix {
-    inherit pkgs;
-    kind = "darwin";
-  };
   bootstrap = pkgs.writeShellScript "ollama-app-bootstrap" ''
     marker="$HOME/.local/state/nix-config/ollama-app-launched"
     if [ ! -e "$marker" ]; then
@@ -37,16 +33,6 @@ lib.mkIf (!config.my.bootstrap) {
     enable = true;
     config = {
       ProgramArguments = [ "${bootstrap}" ];
-      LimitLoadToSessionType = "Aqua";
-      RunAtLoad = true;
-      KeepAlive.SuccessfulExit = false;
-      ThrottleInterval = 60;
-    };
-  };
-  launchd.agents.ollama-provision = {
-    enable = true;
-    config = {
-      ProgramArguments = [ (lib.getExe provision) ];
       LimitLoadToSessionType = "Aqua";
       RunAtLoad = true;
       KeepAlive.SuccessfulExit = false;

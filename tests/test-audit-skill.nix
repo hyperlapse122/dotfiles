@@ -13,7 +13,7 @@ let
   roots = [
     ".claude/skills"
     ".config/opencode/skills"
-    ".pi/agent/skills"
+    ".omp/agent/skills"
   ];
 
   upstream = "openclaw/openclaw";

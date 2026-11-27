@@ -54,7 +54,6 @@ pkgs.testers.nixosTest {
     machine.wait_for_unit("user@1000.service")
     machine.wait_for_unit("user@1001.service")
     machine.wait_until_succeeds(user("systemctl --user is-active ollama.service"))
-    machine.wait_until_succeeds(user("systemctl --user show ollama-provision.service -p ActiveState --value") + " | grep -qx activating")
     machine.succeed(user("systemctl --user is-active default.target"))
     machine.succeed("test ! -e /home/owner/minikube-events")
     machine.fail(user("systemctl --user is-active minikube.service"))

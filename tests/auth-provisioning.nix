@@ -1,7 +1,5 @@
 { pkgs, inputs }:
 let
-  renderer = import ./lib/quality-hook-renderer.nix { inherit pkgs; };
-  opencodeExtension = (renderer "opencode" true).renderExtension ../home/h82/agents/opencode-quality.ts;
   fixtures =
     pkgs.runCommand "fake-auth-secrets"
       {
@@ -189,8 +187,8 @@ pkgs.testers.nixosTest {
         assert keys == [expected], "SOPS publication did not import the expected fixture"
 
     assert_anthropic_key("FAKE anthropic")
-    with subtest("OpenCode quality hook lifecycle through the system nix-ld loader"):
-        machine.succeed("runuser -u alice -- python3 ${./agent-hook-lifecycle.py} opencode /run/current-system/sw/bin/opencode ${opencodeExtension}")
+    with subtest("OpenCode runs through the system nix-ld loader"):
+        machine.succeed("runuser -u alice -- env HOME=/srv/workspace /run/current-system/sw/bin/opencode --version")
     # A failed switch still repoints /run/current-system at the specialisation,
     # which holds no nested one, so resolve it before the first attempt.
     rotated = machine.succeed("readlink -f /run/current-system/specialisation/rotated").strip()

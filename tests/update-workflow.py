@@ -11,17 +11,16 @@ def workflow_json(path):
 
 
 def policy(workflow):
-    assert set(workflow['jobs']) == {'update-dependencies', 'watch'}, 'maintenance and drift must have independent jobs'
+    assert set(workflow['jobs']) == {'update-dependencies'}, 'maintenance runs as one job'
     assert workflow['permissions'] == {'contents': 'read'}, 'workflow permissions must default to read-only contents'
-    assert workflow['jobs']['watch']['permissions'] == {'contents': 'read', 'issues': 'write'}
+    assert set(re.findall(r'secrets\.(\w+)', json.dumps(workflow))) == {'GH_TOKEN_FOR_UPDATES'}, 'maintenance reads no provider API key'
     dispatch = workflow['on']['workflow_dispatch']['inputs']['part']
     assert dispatch['default'] == 'all'
-    assert set(dispatch['options']) == {'all', 'dependencies', 'catalogs', 'drift'}
+    assert set(dispatch['options']) == {'all', 'dependencies', 'catalogs'}
     assert [entry['cron'] for entry in workflow['on']['schedule']] == ['7,37 * * * *']
     assert workflow['concurrency']['cancel-in-progress'] is False
     maintenance = workflow['jobs']['update-dependencies']
     assert maintenance['timeout-minutes'] >= sum(s.get('timeout-minutes', 0) for s in maintenance['steps']) + 30, 'job timeout leaves no reconciliation and cleanup budget'
-    assert 'GH_TOKEN_FOR_UPDATES' not in json.dumps(workflow['jobs']['watch'])
     for job in workflow['jobs'].values():
         checkout = next(s for s in job['steps'] if s.get('uses', '').startswith('actions/checkout@'))
         assert checkout['with']['ref'] == 'main'
@@ -57,7 +56,7 @@ def move_main(snapshot=False):
     other = c['other']
     subprocess.run([real_git, '-C', other, 'fetch', '-q', 'origin', 'main'], check=True)
     subprocess.run([real_git, '-C', other, 'checkout', '-qB', 'main', 'origin/main'], check=True)
-    p = pathlib.Path(other, 'tracked.txt' if c.get('dependency_conflict') else 'home/h82/agents/synthetic-catalog.json' if snapshot else 'concurrent.txt')
+    p = pathlib.Path(other, 'tracked.txt' if c.get('dependency_conflict') else 'home/h82/agents/opencode-go-catalog.json' if snapshot else 'concurrent.txt')
     p.write_text('concurrent dependency\n' if c.get('dependency_conflict') else '{"data":[{"id":"other"}]}\n' if c.get('conflict') else '{"data":[{"id":"new"}]}\n' if snapshot else 'concurrent ' + str(count('moves')))
     subprocess.run([real_git, '-C', other, 'add', '.'], check=True)
     subprocess.run([real_git, '-C', other, 'commit', '-qm', 'concurrent main change'], check=True)
@@ -111,22 +110,11 @@ if args[:2] == ['flake', 'update']:
 if args[:2] == ['run', '.#agent-plugin-release']:
     print('compound-engineering-v2.67.0')
     sys.exit(0)
-if args[:2] == ['run', '.#synthetic-models-watch']:
+if args[:2] == ['run', '.#opencode-go-models-watch']:
     event('catalog-fetch')
     if c.get('catalog_change', True):
         pathlib.Path(args[args.index('--snapshot') + 1]).write_text('{"data":[{"id":"new"}]}\n')
     sys.exit(1 if c.get('catalog_fetch_fail') else 0)
-if args[:2] == ['run', '.#opencode-go-models-watch']:
-    event('go-catalog-fetch')
-    if c.get('go_catalog_change', False):
-        pathlib.Path(args[args.index('--snapshot') + 1]).write_text('{"data":[{"id":"new-go"}]}\n')
-    sys.exit(1 if c.get('go_catalog_fetch_fail') else 0)
-if args[:2] == ['run', '.#provider-models-watch']:
-    provider = args[args.index('--provider') + 1]
-    event('model-list-fetch', provider=provider, secrets=sorted(k for k in ('ANTHROPIC_API_KEY', 'SYNTHETIC_API_KEY', 'GH_TOKEN_FOR_UPDATES') if os.environ.get(k)))
-    if c.get('pi_' + provider + '_change', False):
-        pathlib.Path(args[args.index('--snapshot') + 1]).write_text('{"data":[{"id":"new-' + provider + '"}]}\n')
-    sys.exit(1 if c.get('pi_' + provider + '_fetch_fail') else 0)
 if args and args[0] == 'run': sys.exit(0)
 if args[:2] == ['eval', '--json']:
     group = args[2].removeprefix('.#')
@@ -138,7 +126,7 @@ if args[:2] == ['eval', '--json']:
 if args and args[0] in ('fmt', 'flake', 'build'):
     scope = 'catalogs' if pathlib.Path.cwd().name == 'catalogs' else 'dependencies'
     if scope == 'catalogs':
-        assert {a for a in args if a.startswith('.#')} == {'.#checks.x86_64-linux.pi', '.#checks.x86_64-linux.synthetic-models', '.#checks.x86_64-linux.opencode-go-models-watch', '.#checks.x86_64-linux.provider-models-watch'}, 'catalog verification targets changed'
+        assert {a for a in args if a.startswith('.#')} == {'.#checks.x86_64-linux.opencode-go-models-watch', '.#checks.x86_64-linux.opencode'}, 'catalog verification targets changed'
     if scope == 'catalogs' or args[0] == 'fmt': count(scope + '-round')
     round = int((root / (scope + '-round')).read_text())
     event('verify', scope=scope, command=args[0], args=args, round=round, sha=git('rev-parse', 'HEAD'))
@@ -166,7 +154,7 @@ if args and args[0] in ('fmt', 'flake', 'build'):
             if '--no-link' not in args:
                 raise SystemExit('verification rooted completed closures')
             disk.write_text(str(used + active))
-    if any(os.environ.get(k) for k in ('GH_TOKEN_FOR_UPDATES', 'SYNTHETIC_API_KEY', 'ANTHROPIC_API_KEY')):
+    if os.environ.get('GH_TOKEN_FOR_UPDATES'):
         event('secret-leak')
         sys.exit(95)
     print('verification ' + scope + ' ' + args[0] + ' round ' + str(round))
@@ -181,7 +169,7 @@ if args and args[0] in ('fmt', 'flake', 'build'):
         os.killpg(os.getpgrp(), signal.SIGKILL)
     fail = c.get('verify_fail')
     if fail == scope or (scope == 'dependencies' and fail == args[0]) or (fail == 'after-rebase' and round > 1) or (fail == 'before-rebase' and round == 1): sys.exit(1)
-    if c.get('interaction_fail') and scope == 'dependencies' and 'new' in pathlib.Path('home/h82/agents/synthetic-catalog.json').read_text(): sys.exit(1)
+    if c.get('interaction_fail') and scope == 'dependencies' and 'new' in pathlib.Path('home/h82/agents/opencode-go-catalog.json').read_text(): sys.exit(1)
     event('verified-command', scope=scope, command=args[0], sha=git('rev-parse', 'HEAD'))
     sys.exit(0)
 raise SystemExit('unexpected nix arguments: ' + repr(args))
@@ -215,9 +203,7 @@ class Fixture:
         files = {
             'tracked.txt': 'base dependency\n',
             'flake.nix': '{\n  inputs.compound-engineering-plugin.url = "github:EveryInc/compound-engineering-plugin/compound-engineering-v2.67.0";\n}\n',
-            'home/h82/agents/synthetic-catalog.json': '{"data":[{"id":"old"}]}\n',
-            'home/h82/agents/opencode-go-catalog.json': '{"data":[{"id":"old-go"}]}\n',
-            'home/h82/agents/anthropic-models.json': '{"data":[{"id":"old-anthropic"}]}\n',
+            'home/h82/agents/opencode-go-catalog.json': '{"data":[{"id":"old"}]}\n',
             'scripts/ci-update-publish': publisher,
             'scripts/ci-update-verify': verifier,
         }
@@ -255,17 +241,14 @@ class Fixture:
             path.chmod(0o755)
         self.env.update(PATH=str(self.bin) + os.pathsep + os.environ['PATH'], TEST_CONTROL=str(self.control), GITHUB_WORKSPACE=str(self.repo), RUNNER_TEMP=str(self.root / 'runner'), GITHUB_STEP_SUMMARY=str(self.root / 'summary'), GITHUB_REPOSITORY='example/dotfiles', GITHUB_RUN_ID='1729', GITHUB_RUN_ATTEMPT='1')
         Path(self.env['RUNNER_TEMP']).mkdir()
-        self.secrets = {'GH_TOKEN_FOR_UPDATES': 'fake-update-token', 'SYNTHETIC_API_KEY': 'fake-catalog-key', 'ANTHROPIC_API_KEY': 'fake-anthropic-key'}
+        self.secrets = {'GH_TOKEN_FOR_UPDATES': 'fake-update-token'}
         if self.controls.get('missing_token'): del self.secrets['GH_TOKEN_FOR_UPDATES']
-        if self.controls.get('missing_catalog_key'): del self.secrets['SYNTHETIC_API_KEY']
-        if self.controls.get('missing_anthropic_key'): del self.secrets['ANTHROPIC_API_KEY']
         self.workflow = workflow
         self.part = part
         self.event = event
         self.steps = {}
         self.ok = True
         self.cancelled = False
-        self.job_ran = False
         self.log = ''
 
     def call(self, *args):
@@ -302,7 +285,6 @@ class Fixture:
     def run(self):
         job = self.workflow['jobs']['update-dependencies']
         if not self.expression(job.get('if', 'True')): return self
-        self.job_ran = True
         env = dict(self.env)
         env.update({key: self.expand(value) for key, value in job.get('env', {}).items()})
         for index, step in enumerate(job['steps']):
@@ -326,7 +308,7 @@ class Fixture:
             self.log += '\n' + step.get('name', name) + ':\n' + result.stdout
             self.steps[name] = {'outcome': 'success' if result.returncode == 0 else 'failure', 'outputs': dict(line.split('=', 1) for line in output.read_text().splitlines() if '=' in line)}
             if result.returncode and not step.get('continue-on-error', False): self.ok = False
-            if name == 'catalog' and self.controls.get('cancel_after_catalog'):
+            if name == 'go_catalog' and self.controls.get('cancel_after_catalog'):
                 self.cancelled = True
                 self.ok = False
         return self
@@ -388,19 +370,16 @@ def bounded_verification(f):
 def behavioral_tests(workflow, publisher, verifier):
     def happy(f):
         require(f.ok, 'successful workflow failed')
-        require('new' in f.remote('home/h82/agents/synthetic-catalog.json'), 'snapshot was not published')
+        require('new' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'snapshot was not published')
         require('updated dependency' in f.remote('tracked.txt'), 'dependency was not published')
         verify_before_push(f)
     exercise(workflow, publisher, verifier, 'all parts publish catalog before dependencies', happy)
-    for part, selected in [('catalogs', 'catalog-fetch'), ('dependencies', 'dependency-update'), ('drift', None)]:
-        def selection(f, part=part, selected=selected):
+    for part, selected in [('catalogs', 'catalog-fetch'), ('dependencies', 'dependency-update')]:
+        def selection(f, selected=selected):
             require(f.ok, 'selected run failed')
             other = 'dependency-update' if selected == 'catalog-fetch' else 'catalog-fetch'
-            require(bool(f.events_of(selected)) if selected else not f.job_ran, 'manual selection did not run its part')
+            require(bool(f.events_of(selected)), 'manual selection did not run its part')
             require(not f.events_of(other), 'manual selection ran another producer')
-            require(bool(f.events_of('go-catalog-fetch')) == (part == 'catalogs'), 'the Go catalog refresh follows the catalogs selection')
-            require({e['provider'] for e in f.events_of('model-list-fetch')} == ({'anthropic'} if part == 'catalogs' else set()), 'the model list refreshes follow the catalogs selection')
-            require(f.expression(workflow['jobs']['watch']['if']) == (part == 'drift'), 'drift selection gate is wrong')
         exercise(workflow, publisher, verifier, 'manual ' + part, selection, part=part)
     exercise(workflow, publisher, verifier, 'scheduled all-parts run', happy, part='', event='schedule')
     exercise(workflow, publisher, verifier, 'all checks and VMs fit a bounded runner disk', bounded_verification, part='dependencies', bounded_disk=True)
@@ -414,63 +393,22 @@ def behavioral_tests(workflow, publisher, verifier):
     exercise(workflow, publisher, verifier, 'no candidates skip verification and publication', no_changes, deps_change=False, catalog_change=False)
     def catalog_failure(f):
         require(not f.ok, 'catalog failure was hidden')
-        require('old' in f.remote('home/h82/agents/synthetic-catalog.json'), 'failed catalog leaked')
+        require('old' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'failed catalog leaked')
         require('updated dependency' in f.remote('tracked.txt'), 'catalog failure blocked dependency publication')
     exercise(workflow, publisher, verifier, 'catalog fetch failure does not block dependencies', catalog_failure, catalog_fetch_fail=True)
-    exercise(workflow, publisher, verifier, 'missing catalog key does not block dependencies', catalog_failure, missing_catalog_key=True)
     exercise(workflow, publisher, verifier, 'catalog verification failure does not block dependencies', catalog_failure, verify_fail='catalogs')
-    def go_catalog_published(f):
-        require(f.ok, 'a successful Go catalog refresh failed the workflow')
-        require('new-go' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'Go snapshot was not published')
-        require('old' in f.remote('home/h82/agents/synthetic-catalog.json'), 'an unchanged Synthetic snapshot was rewritten')
-        require(f.events_of('go-catalog-fetch') and f.events_of('verify'), 'Go snapshot change was not verified')
-        require(any('opencode-go-models-watch' in a for e in f.events_of('verify') if e['scope'] == 'catalogs' for a in e['args']), 'Go check is not a catalog verification target')
-        verify_before_push(f)
-    exercise(workflow, publisher, verifier, 'a Go snapshot change alone publishes after verification', go_catalog_published, part='catalogs', catalog_change=False, deps_change=False, go_catalog_change=True)
-    def both_catalogs(f):
-        require(f.ok, 'both catalog refreshes failed the workflow')
-        require('new' in f.remote('home/h82/agents/synthetic-catalog.json') and 'new-go' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'a catalog snapshot was not published')
+    def catalog_published(f):
+        require(f.ok, 'a successful catalog refresh failed the workflow')
+        require('new' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'snapshot was not published')
         log = f.call('--git-dir', str(f.origin), 'log', '--format=%s', f'{f.base}..main').splitlines()
-        require('chore(agents): refresh the synthetic catalog snapshot' in log and 'chore(agents): refresh the opencode go catalog snapshot' in log, 'each snapshot needs its own commit')
+        require(log == ['chore(agents): refresh the opencode go catalog snapshot'], 'the snapshot needs its own commit: ' + repr(log))
+        require(f.events_of('catalog-fetch') and f.events_of('verify'), 'snapshot change was not verified')
         verify_before_push(f)
-    exercise(workflow, publisher, verifier, 'both catalog snapshots publish as separate commits', both_catalogs, part='catalogs', go_catalog_change=True)
-    def go_catalog_failure(f):
-        require(not f.ok, 'Go catalog failure was hidden')
-        require('old-go' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'failed Go catalog leaked')
-        require('new' in f.remote('home/h82/agents/synthetic-catalog.json'), 'Go catalog failure blocked the Synthetic snapshot')
-        require('updated dependency' in f.remote('tracked.txt'), 'Go catalog failure blocked dependency publication')
-    exercise(workflow, publisher, verifier, 'Go catalog failure does not block the other updates', go_catalog_failure, go_catalog_fetch_fail=True, go_catalog_change=True)
-    def synthetic_failure_keeps_go(f):
-        require(not f.ok, 'catalog failure was hidden')
-        require('new-go' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'Synthetic failure blocked the Go snapshot')
-    exercise(workflow, publisher, verifier, 'Synthetic failure does not block the Go snapshot', synthetic_failure_keeps_go, part='catalogs', catalog_fetch_fail=True, go_catalog_change=True)
-    def pi_lock_published(f):
-        require(f.ok, 'a successful model list refresh failed the workflow')
-        require('new-anthropic' in f.remote('home/h82/agents/anthropic-models.json'), 'the anthropic list was not published')
-        require(any('provider-models-watch' in a for e in f.events_of('verify') if e['scope'] == 'catalogs' for a in e['args']), 'the model list check is not a catalog verification target')
-        log = f.call('--git-dir', str(f.origin), 'log', '--format=%s', f'{f.base}..main').splitlines()
-        require(log == ['chore(agents): refresh the anthropic model list'], 'the anthropic list needs its own commit: ' + repr(log))
-        verify_before_push(f)
-    exercise(workflow, publisher, verifier, 'an anthropic model list change alone publishes after verification', pi_lock_published, part='catalogs', catalog_change=False, deps_change=False, pi_anthropic_change=True)
-    def pi_missing_anthropic(f):
-        require(not f.ok, 'a missing Anthropic secret was hidden')
-        require('old-anthropic' in f.remote('home/h82/agents/anthropic-models.json'), 'the Anthropic list changed without its secret')
-        require(not f.events_of('model-list-fetch'), 'the Anthropic refresh ran without its secret')
-        require('::warning::ANTHROPIC_API_KEY is not set' in f.log, 'the missing secret was not named')
-    exercise(workflow, publisher, verifier, 'a missing Anthropic key keeps its list', pi_missing_anthropic, part='catalogs', catalog_change=False, deps_change=False, pi_anthropic_change=True, missing_anthropic_key=True)
-    def pi_failure_keeps_others(f):
-        require(not f.ok, 'a model list failure was hidden')
-        require('old-anthropic' in f.remote('home/h82/agents/anthropic-models.json'), 'a failed Anthropic list leaked')
-        require('new' in f.remote('home/h82/agents/synthetic-catalog.json') and 'updated dependency' in f.remote('tracked.txt'), 'a model list failure blocked other updates')
-    exercise(workflow, publisher, verifier, 'a model list failure does not block the other updates', pi_failure_keeps_others, pi_anthropic_change=True, pi_anthropic_fetch_fail=True)
-    def pi_secrets_scoped(f):
-        runs = {e['provider']: e['secrets'] for e in f.events_of('model-list-fetch')}
-        require(runs == {'anthropic': ['ANTHROPIC_API_KEY']}, 'each model list step must see only its own key: ' + repr(runs))
-    exercise(workflow, publisher, verifier, 'each model list step sees only its own provider key', pi_secrets_scoped, part='catalogs', catalog_change=False, deps_change=False)
+    exercise(workflow, publisher, verifier, 'a catalog snapshot change alone publishes after verification', catalog_published, part='catalogs', deps_change=False)
     def dependency_failure(f):
         require(not f.ok, 'dependency failure was hidden')
         require(f.steps['publish_dependencies']['outputs'].get('failure_stage') == 'verification', 'unchanged-main failure lost its verification stage')
-        require('new' in f.remote('home/h82/agents/synthetic-catalog.json'), 'dependency failure blocked catalog publication')
+        require('new' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'dependency failure blocked catalog publication')
         require('base dependency' in f.remote('tracked.txt'), 'failed dependency leaked to main')
         require(any(e['args'][:2] == ['pr', 'create'] for e in f.events_of('gh')), 'dependency failure did not reconcile')
         require('updated dependency' in f.remote('tracked.txt', f.reconcile_branch), 'reconciliation lost dependency candidate')
@@ -505,7 +443,7 @@ def behavioral_tests(workflow, publisher, verifier):
     exercise(workflow, publisher, verifier, 'large failure logs still open a reconciliation PR', bounded_body, part='dependencies', verify_fail='build', large_logs=True, log_repeat=60000)
     def update_failure(f):
         require(not f.ok, 'updater failure was hidden')
-        require('new' in f.remote('home/h82/agents/synthetic-catalog.json'), 'failed updater blocked catalog')
+        require('new' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'failed updater blocked catalog')
         require('base dependency' in f.remote('tracked.txt'), 'partial updater output leaked')
     exercise(workflow, publisher, verifier, 'partial failed updater state stays isolated', update_failure, deps_update_fail=True)
     def preserved(f):
@@ -542,12 +480,12 @@ def behavioral_tests(workflow, publisher, verifier):
     def rebased_failure(f):
         require(not f.ok, 'post-rebase failure was hidden')
         require(not f.events_of('push-attempt'), 'failed rebased candidate reached push')
-        require('old' in f.remote('home/h82/agents/synthetic-catalog.json'), 'failed rebased candidate reached main')
+        require('old' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'failed rebased candidate reached main')
     exercise(workflow, publisher, verifier, 'failed post-rebase verification pushes nothing', rebased_failure, part='catalogs', move_fetch=2, verify_fail='after-rebase')
     def conflict(f):
         require(not f.ok and not f.events_of('push-attempt'), 'conflicted candidate was pushed')
         require(f.steps['publish_catalogs']['outputs']['failure_stage'] == 'rebase', 'conflict was attributed to verification')
-        require('other' in f.remote('home/h82/agents/synthetic-catalog.json'), 'concurrent snapshot was lost')
+        require('other' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'concurrent snapshot was lost')
     exercise(workflow, publisher, verifier, 'rebase conflicts abort and push nothing', conflict, part='catalogs', move_fetch=2, conflict=True)
     def rejected(f):
         require(f.ok, 'one rejected push was not recovered')
@@ -619,7 +557,7 @@ def mutation_tests(workflow, publisher, verifier):
     def no_duplicate_push(f):
         require(not f.events_of('push-attempt'), 'already-applied snapshot reached push')
     def selected_only(f):
-        require(not f.events_of('catalog-fetch') and not f.events_of('go-catalog-fetch') and not f.events_of('model-list-fetch'), 'manual dependencies ran catalogs')
+        require(not f.events_of('catalog-fetch'), 'manual dependencies ran catalogs')
 
     for name, before, after, expected in [
         ('aggregate flake build', 'check --no-build', 'check', 'bounded dependency verification exhausted runner disk'),
@@ -649,7 +587,7 @@ def mutation_tests(workflow, publisher, verifier):
     caught('superseded failure summary retained', workflow, publisher.replace(summary_reset, ':', 1), verifier, clean_summary, 'superseded failure remained in the step summary', part='dependencies', move_fetch=2, verify_fail='before-rebase')
     wf = copy.deepcopy(workflow)
     step = next(s for s in wf['jobs']['update-dependencies']['steps'] if s.get('id') == 'publish_catalogs')
-    step['if'] = step['if'].replace("steps.catalog.outputs.changed == 'true'", "steps.catalog.outputs.changed != 'unknown'")
+    step['if'] = step['if'].replace("steps.go_catalog.outputs.changed == 'true'", "steps.go_catalog.outputs.changed != 'unknown'")
     caught('no-change gate removed', wf, publisher, verifier, no_heavy, 'unchanged run performed verification', part='catalogs', catalog_change=False)
     wf = copy.deepcopy(workflow)
     next(s for s in wf['jobs']['update-dependencies']['steps'] if s.get('id') == 'prepare_catalogs')['if'] = '!cancelled()'
@@ -667,16 +605,8 @@ def mutation_tests(workflow, publisher, verifier):
     require(anchor in step['run'], 'missing candidate isolation mutation anchor')
     step['run'] = step['run'].replace(anchor, 'git worktree add --detach "$RUNNER_TEMP/updates/dependencies" "$(git -C "$RUNNER_TEMP/updates/catalogs" rev-parse HEAD)"')
     def isolated(f):
-        require('old' in f.remote('home/h82/agents/synthetic-catalog.json'), 'failed catalog candidate leaked into dependency publication')
+        require('old' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'failed catalog candidate leaked into dependency publication')
     caught('dependency candidate isolation removed', wf, publisher, verifier, isolated, 'failed catalog candidate leaked', verify_fail='catalogs')
-    wf = copy.deepcopy(workflow)
-    wf['jobs']['watch'].setdefault('env', {})['GH_TOKEN_FOR_UPDATES'] = '${{ secrets.GH_TOKEN_FOR_UPDATES }}'
-    try:
-        policy(wf)
-    except AssertionError:
-        print('update-workflow: mutation caught - push credential leaked to drift job')
-    else:
-        raise AssertionError('drift credential mutation survived')
     wf = copy.deepcopy(workflow)
     wf['jobs']['update-dependencies']['timeout-minutes'] = 180
     try:

@@ -248,7 +248,14 @@ let
     }
   );
 
-  hiddenModels = [ "default" ] ++ import ./agents/pi-hidden-models.nix;
+  hiddenModels = [
+    "default"
+    "synthetic/infinite:small:vision"
+    "synthetic/syn:large:text"
+    "synthetic/syn:large:vision"
+    "synthetic/syn:small:text"
+    "synthetic/syn:small:vision"
+  ];
 in
 {
   home.activation.t3Retirement = lib.hm.dag.entryAfter [ "installPackages" ] ''
