@@ -29,7 +29,7 @@ See [generations](../CONCEPTS.md#generations) and [activation reassertion](../CO
 The unified maintenance workflow runs every 30 minutes and can also be dispatched manually with `part: dependencies` or `part: all`.
 Prezto belongs to the dependency candidate, which starts from current main after catalog publication.
 It runs the packaged helper and includes its pin in the normal formatting, flake-check, and VM verification path, repeated after each changed-main rebase.
-A failed refresh exits nonzero, preserves the previous pin, and stops the dependency candidate; catalog updates and drift reporting remain independent.
+A failed refresh exits nonzero, preserves the previous pin, and stops the dependency candidate; catalog updates remain independent.
 Verification failures use the workflow's existing reconciliation path.
 
 On a Linux builder, from the repository root:

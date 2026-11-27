@@ -80,9 +80,7 @@ A trait need not be set by the host: the shared profile may default it from othe
 
 **Declared set** — the settings this repository states a value for, as opposed to the ones it leaves alone. The distinction is what makes the boundary legible: a setting inside the set returns to its declared value on the next rebuild, and a setting outside it is the user's permanently. Growing the set therefore trades the user's freedom for reproducibility one key at a time, which is why membership is decided by stated categories rather than by whichever values happen to be convenient to declare.
 
-**Model source** — the selected provider models the repository names for startup defaults and model-watch comparisons, including each model's identity, lineage, and requested effort. It controls those selections rather than the provider's complete model list; catalog snapshots supply that list. A runtime that discovers its subscription roster natively does not receive model definitions from this source.
-
-**Catalog snapshot** — the committed copy of a provider's complete model catalog from which managed API model definitions are selected. Selected metadata overrides matching runtime entries until a newer snapshot is applied. Applying a newer declaration removes locally added definitions from the managed common document while preserving authentication and conversation state.
+**Catalog snapshot** — the committed copy of a provider's complete model catalog from which managed API model definitions are declared; today only the OpenCode Go catalog has one. Selected metadata overrides matching runtime entries until a newer snapshot is applied. Applying a newer declaration removes locally added definitions from the managed common document while preserving authentication and conversation state.
 
 ## Tool retirement
 
