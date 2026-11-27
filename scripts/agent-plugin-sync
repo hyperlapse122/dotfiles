@@ -146,6 +146,9 @@ class Harness:
     without marketplaces overrides both.
     """
 
+    plugin_key = 'id'
+    scope = 'user'
+
     def __init__(self, cli):
         self.cli = cli
 
@@ -158,6 +161,10 @@ class Harness:
     def remove_marketplace(self, name, dry_run):
         require([self.cli, 'plugin', 'marketplace', 'remove', name], dry_run, 'marketplace remove')
 
+    def plugin_command(self, verb, plugin_id, dry_run):
+        require([self.cli, 'plugin', verb, plugin_id, '--scope', self.scope], dry_run,
+                'plugin ' + verb)
+
     def marketplaces(self):
         return listing(self, ['plugin', 'marketplace', 'list', '--json'], 'marketplace list',
                        'marketplaces')
@@ -166,7 +173,6 @@ class Harness:
 class Claude(Harness):
     marketplace_manifest = '.claude-plugin/marketplace.json'
     plugin_manifest = '.claude-plugin/plugin.json'
-    plugin_key = 'id'
 
     @staticmethod
     def recorded_source(entry):
@@ -188,11 +194,7 @@ class Claude(Harness):
         )
 
     def remove_plugin(self, plugin_id, dry_run):
-        require(
-            [self.cli, 'plugin', 'uninstall', plugin_id, '--scope', 'user'],
-            dry_run,
-            'plugin uninstall',
-        )
+        self.plugin_command('uninstall', plugin_id, dry_run)
 
     def unregister(self, marketplace, plugin_id, dry_run):
         self.remove_marketplace(marketplace, dry_run)
@@ -202,16 +204,8 @@ class Claude(Harness):
         # how a plugin removed or disabled by hand between rebuilds comes back.
         # install is a no-op at any present version, so update is what
         # re-resolves a moved pin.
-        require(
-            [self.cli, 'plugin', 'install', plugin_id, '--scope', 'user'],
-            dry_run,
-            'plugin install',
-        )
-        require(
-            [self.cli, 'plugin', 'update', plugin_id, '--scope', 'user'],
-            dry_run,
-            'plugin update',
-        )
+        self.plugin_command('install', plugin_id, dry_run)
+        self.plugin_command('update', plugin_id, dry_run)
         code, output = run([self.cli, 'plugin', 'enable', plugin_id], dry_run)
         if code != 0 and ALREADY_ENABLED not in output.lower():
             raise Failure('plugin enable failed: {}'.format(output or 'no output'))
@@ -244,8 +238,6 @@ class Omp(Harness):
 
     marketplace_manifest = '.omp-plugin/marketplace.json'
     plugin_manifest = '.claude-plugin/plugin.json'
-    plugin_key = 'id'
-    scope = 'user'
 
     def __init__(self, cli):
         super().__init__(cli)
@@ -298,10 +290,6 @@ class Omp(Harness):
 
     def add_marketplace(self, path, dry_run):
         require([self.cli, 'plugin', 'marketplace', 'add', path], dry_run, 'marketplace add')
-
-    def plugin_command(self, verb, plugin_id, dry_run):
-        require([self.cli, 'plugin', verb, plugin_id, '--scope', self.scope], dry_run,
-                'plugin ' + verb)
 
     def remove_plugin(self, plugin_id, dry_run):
         self.plugin_command('uninstall', plugin_id, dry_run)

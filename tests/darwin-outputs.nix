@@ -16,17 +16,16 @@ let
     body = (generation / "activate").read_text()
     note = '_iNote "Activating %s" "ollamaSettings"\n'
     agents = generation / "LaunchAgents"
-    paths = [agents / "org.nix-community.home.ollama-bootstrap.plist"]
+    path = agents / "org.nix-community.home.ollama-bootstrap.plist"
     assert (note in body) == enabled
-    assert all(path.exists() == enabled for path in paths)
+    assert path.exists() == enabled
     assert not (agents / "org.nix-community.home.ollama-provision.plist").exists()
     if enabled:
         assert body.index(note) < body.index('_iNote "Activating %s" "setupLaunchAgents"\n')
-        plists = [plistlib.loads(path.read_bytes()) for path in paths]
-        for plist in plists:
-            assert plist["LimitLoadToSessionType"] == "Aqua"
-            assert plist["RunAtLoad"] is True and plist["KeepAlive"] == {"SuccessfulExit": False}
-            assert plist["ThrottleInterval"] == 60
+        plist = plistlib.loads(path.read_bytes())
+        assert plist["LimitLoadToSessionType"] == "Aqua"
+        assert plist["RunAtLoad"] is True and plist["KeepAlive"] == {"SuccessfulExit": False}
+        assert plist["ThrottleInterval"] == 60
         def launch_executable(plist):
             shell, flag, command = plist["ProgramArguments"]
             prefix = "/bin/wait4path /nix/store && exec "
@@ -55,7 +54,7 @@ let
             stub.write_text('#!/bin/sh\nprintf "called\\n" >> "$CALLS"\nexit "''${OPEN_STATUS:-0}"\n')
             stub.chmod(0o755)
             env["CALLS"] = str(calls)
-            bootstrap = launch_executable(plists[0]).read_text().replace("/usr/bin/open", str(stub))
+            bootstrap = launch_executable(plist).read_text().replace("/usr/bin/open", str(stub))
             assert str(stub) in bootstrap
             env["OPEN_STATUS"] = "1"
             assert subprocess.run(["bash", "-c", bootstrap], env=env).returncode != 0 and not marker.exists()

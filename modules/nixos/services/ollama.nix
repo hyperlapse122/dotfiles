@@ -32,6 +32,5 @@ in
         RestartSec = 5;
       };
     };
-
   };
 }
