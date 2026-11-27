@@ -171,8 +171,7 @@ def strings(value):
 
 
 def declaration(declared, fmt='json'):
-    """Parse the rendered declaration into (assign, retire, paths, removals, owned, upserts, prefixes, drops,
-    entry_sets, hook_groups).
+    """Parse the rendered declaration into its tables.
 
     `remove` is how a key leaves the declared set.  Dropping it from `set`
     alone would leave its last written value on every machine forever, because

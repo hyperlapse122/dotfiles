@@ -12,7 +12,6 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md',
               'pi': '.pi/agent/AGENTS.md', 'opencode': '.config/opencode/AGENTS.md',
               'omp': '.omp/agent/AGENTS.md'}
 TASK_GUIDE = 'task-guide.md'
-GUIDES = (TASK_GUIDE,)
 
 
 def body(home, harness):
@@ -36,8 +35,8 @@ def check_receipt(text, receipts, kind, harness=None):
             raise AssertionError('policy mutation escaped validation')
 
 
-def check_guides(sources):
-    task = sources[TASK_GUIDE].read_text()
+def check_guides(guide):
+    task = guide.read_text()
     assert 'Read the first relevant CI failure' in task
     ci_triage, = (section for section in task.split('\n## ')
                   if 'ci triage' in section.partition('\n')[0].lower())
@@ -80,8 +79,8 @@ def main():
     template = Path(sys.argv[1]).read_text()
     helper, renderer = sys.argv[3:5]
     receipts = json.loads(Path(sys.argv[5]).read_text())
-    sources = {TASK_GUIDE: Path(sys.argv[6])}
-    check_guides(sources)
+    guide = Path(sys.argv[6])
+    check_guides(guide)
     for kind in ('nixos', 'darwin'):
         exercise(template, helper, renderer, kind, receipts)
     for entry in json.loads(Path(sys.argv[2]).read_text()):
@@ -100,15 +99,13 @@ def main():
 
             def seed_links():
                 guides.mkdir(parents=True)
-                for name in GUIDES:
-                    (guides / name).symlink_to(entry['git'])
+                (guides / TASK_GUIDE).symlink_to(entry['git'])
 
             seed_links()
             keep = guides / 'keep.md'
             keep.write_text('unexpected user file\n')
             run(cleanup)
-            for name in GUIDES:
-                assert not (guides / name).exists(), f'{name} survived the migration'
+            assert not (guides / TASK_GUIDE).exists(), f'{TASK_GUIDE} survived the migration'
             assert keep.read_text() == 'unexpected user file\n'
             keep.unlink()
             run(cleanup)
@@ -117,14 +114,13 @@ def main():
 
             seed_links()
             run(cleanup, dict(env, DRY_RUN='1'))
-            for name in GUIDES:
-                assert (guides / name).is_symlink(), f'DRY_RUN removed {name}'
+            assert (guides / TASK_GUIDE).is_symlink(), f'DRY_RUN removed {TASK_GUIDE}'
             shutil.rmtree(guides)
 
             guides.mkdir(parents=True)
-            (guides / 'task-guide.md').symlink_to(sources['task-guide.md'])
+            (guides / TASK_GUIDE).symlink_to(guide)
             run(cleanup)
-            assert os.readlink(guides / 'task-guide.md') == str(sources['task-guide.md'])
+            assert os.readlink(guides / TASK_GUIDE) == str(guide)
 
             sentinel = home / 'omp-agents-sentinel'
             sentinel.write_text('sentinel instructions\n')
@@ -152,7 +148,7 @@ def main():
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_text('Previous personal instructions\n')
             run(entry['activation'])
-            assert os.readlink(guides / 'task-guide.md') == str(sources['task-guide.md'])
+            assert os.readlink(guides / TASK_GUIDE) == str(guide)
             assert not (home / '.codex').exists(), 'retired Codex instructions were delivered'
             for harness in DELIVERIES:
                 destination = home / DELIVERIES[harness]

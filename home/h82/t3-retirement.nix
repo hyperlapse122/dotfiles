@@ -1,8 +1,7 @@
 /*
-  One-shot cleanup for the retired T3 Code settings. The packages and the
-  mutable settings module are gone; this entry removes only the values the
-  repository declared, restores the launch arguments it composed, and then
-  records that the cleanup ran. Conversations, worktrees, caches, and refs stay.
+  One-shot cleanup: remove only the values and generated files the repository
+  declared, restore the launch arguments it composed, and preserve
+  conversations, worktrees, caches, and refs.
 */
 {
   config,
@@ -16,7 +15,8 @@ let
   profileDirectory = config.home.profileDirectory or "${config.home.homeDirectory}/.nix-profile";
 
   retire = pkgs.writeScriptBin "retire-t3" (
-    "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../../scripts/retire-t3
+    "#!${pkgs.python3}/bin/python3\n"
+    + lib.removePrefix "#!/usr/bin/env python3\n" (builtins.readFile ../../scripts/retire-t3)
   );
 
   settingsRemoval = pkgs.writeText "t3-retired-settings.json" (
@@ -224,6 +224,15 @@ let
         {
           path = [
             "providerInstances"
+            "claudeAgent"
+            "environment"
+          ];
+          key = "name";
+          values = [ "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH" ];
+        }
+        {
+          path = [
+            "providerInstances"
             "opencode"
             "environment"
           ];
@@ -248,7 +257,7 @@ let
     }
   );
 
-  hiddenModels = import ./agents/pi-hidden-models.nix;
+  hiddenModels = [ "default" ] ++ import ./agents/pi-hidden-models.nix;
 in
 {
   home.activation.t3Retirement = lib.hm.dag.entryAfter [ "installPackages" ] ''
@@ -258,7 +267,12 @@ in
         --merger ${lib.escapeShellArg merger} \
         --settings-declaration ${settingsRemoval} \
         --client-declaration ${clientRemoval} \
-        ${lib.concatMapStrings (model: "--hidden-model ${lib.escapeShellArg model} ") hiddenModels}
+        ${lib.escapeShellArgs (
+          lib.concatMap (model: [
+            "--hidden-model"
+            model
+          ]) hiddenModels
+        )}
     fi
   '';
 }

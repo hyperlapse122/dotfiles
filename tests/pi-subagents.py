@@ -18,7 +18,7 @@ def child_result(events):
     assert not result['isError'] and 'Test child marker.' in json.dumps(result['result']), result
 
 
-def rpc(command, env, cwd, eligible):
+def rpc(command, env, cwd):
     with subprocess.Popen([*command, '--mode', 'rpc'], cwd=cwd, env=env,
                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
         def send(request):
@@ -45,15 +45,14 @@ def rpc(command, env, cwd, eligible):
             assert response['success'], response
             names = {command['name'] for command in response['data']['commands']}
             for name in ('subagents', 'skill:pi-subagents', 'parallel-research'):
-                assert (name in names) == eligible, (name, names)
-            if eligible:
-                send({'id': 'prompt', 'type': 'prompt', 'message': start})
-                result = []
-                for event in events:
-                    result.append(event)
-                    if event.get('type') == 'agent_end':
-                        break
-                child_result(result)
+                assert name in names, (name, names)
+            send({'id': 'prompt', 'type': 'prompt', 'message': start})
+            result = []
+            for event in events:
+                result.append(event)
+                if event.get('type') == 'agent_end':
+                    break
+            child_result(result)
         finally:
             process.kill()
 
@@ -70,4 +69,4 @@ with tempfile.TemporaryDirectory() as directory:
     assert cli.returncode == 0, cli.stderr
     child_result(map(json.loads, cli.stdout.splitlines()))
 
-    rpc(command, env, home, True)
+    rpc(command, env, home)

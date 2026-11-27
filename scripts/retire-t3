@@ -88,20 +88,6 @@ def join_args(arguments):
     return ' '.join(quote(value) for value in arguments)
 
 
-def flag_values(arguments, names):
-    values = []
-    for index, argument in enumerate(arguments):
-        if argument in names:
-            if index + 1 == len(arguments):
-                raise ValueError('a launch option requires a value')
-            values.append(arguments[index + 1])
-        else:
-            for name in names:
-                if argument.startswith(name + '='):
-                    values.append(argument[len(name) + 1:])
-    return values
-
-
 def clean_owned(arguments, addition_file):
     result = []
     index = 0
@@ -123,6 +109,7 @@ def clean_owned(arguments, addition_file):
 def restore_arguments(current, old, addition_file):
     arguments = tokenize(current)
     previous = tokenize(old.get('lastArgs', ''))
+    baseline = tokenize(old.get('baseArgs', ''))
     matches = [
         index
         for index in range(len(arguments) - len(previous) + 1)
@@ -130,9 +117,8 @@ def restore_arguments(current, old, addition_file):
     ]
     if len(matches) == 1:
         index = matches[0]
-        arguments[index:index + len(previous)] = tokenize(old.get('baseArgs', ''))
+        arguments[index:index + len(previous)] = baseline
     else:
-        baseline = tokenize(old.get('baseArgs', ''))
         for control in old.get('controlArgs', []):
             locations = [
                 index
@@ -147,10 +133,8 @@ def restore_arguments(current, old, addition_file):
                 index = locations[0]
                 arguments[index:index + len(control)] = old.get('controlBaseArgs', [])
     arguments = clean_owned(arguments, addition_file)
-    # A file the user emptied after launch, or one that held only the managed
-    # append, still gets the arguments recorded before the launch composer ran.
     if not arguments:
-        arguments = tokenize(old.get('baseArgs', ''))
+        arguments = baseline
     return arguments
 
 
@@ -262,7 +246,7 @@ def main(argv=None):
     if isinstance(state, dict):
         changed_settings |= restore_provider(settings, state, 'claudeAgent', 'claude', instructions)
         changed_settings |= restore_provider(settings, state, 'pi', 'pi', instructions)
-        changed_client |= remove_hidden_models(client, set(args.hidden_model) | {'default'})
+        changed_client |= remove_hidden_models(client, set(args.hidden_model))
 
     try:
         if changed_settings:

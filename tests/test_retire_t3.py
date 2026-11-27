@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 import subprocess
 import sys
@@ -27,6 +26,8 @@ SETTINGS_REMOVAL = {
          'value': 'beforeCacheExpires', 'prune': True},
     ],
     'removeEntries': [
+        {'path': ['providerInstances', 'claudeAgent', 'environment'],
+         'key': 'name', 'values': ['CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH']},
         {'path': ['providerInstances', 'opencode', 'environment'],
          'key': 'name', 'values': ['OPENCODE_CONFIG_CONTENT']},
     ],
@@ -77,6 +78,11 @@ class RetireT3Tests(unittest.TestCase):
                             self.instructions / 'claude.md'
                         ),
                     },
+                    'environment': [
+                        {'name': 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH',
+                         'value': '', 'sensitive': False},
+                        {'name': 'USER_ENV', 'value': 'keep'},
+                    ],
                     'userField': 'keep',
                 },
                 'opencode': {
@@ -116,16 +122,16 @@ class RetireT3Tests(unittest.TestCase):
             (self.instructions / name).write_text(name)
         (self.userdata / 't3code-settings-ownership.json').write_text('{}')
 
-    def run_helper(self):
+    def run_helper(self, home=None, hidden=('default', 'model-x')):
         return subprocess.run(
             [
                 sys.executable,
                 SCRIPT,
-                '--home', self.home,
+                '--home', home or self.home,
                 '--merger', self.merger,
                 '--settings-declaration', self.settings_declaration,
                 '--client-declaration', self.client_declaration,
-                '--hidden-model', 'model-x',
+                *[word for model in hidden for word in ('--hidden-model', model)],
             ],
             text=True,
             capture_output=True,
@@ -146,6 +152,7 @@ class RetireT3Tests(unittest.TestCase):
         self.assertNotIn('driver', claude)
         self.assertNotIn('enabled', claude)
         self.assertNotIn('idleCompaction', claude['config'])
+        self.assertEqual(claude['environment'], [{'name': 'USER_ENV', 'value': 'keep'}])
         self.assertEqual(claude['userField'], 'keep')
         opencode = settings['providerInstances']['opencode']
         self.assertEqual(opencode['environment'], [{'name': 'USER_ENV', 'value': 'keep'}])
@@ -167,31 +174,40 @@ class RetireT3Tests(unittest.TestCase):
             '--add-dir base',
         )
 
+    def test_empty_launch_arguments_restore_the_recorded_base(self):
+        self.seed()
+        settings = json.loads(self.settings.read_text())
+        settings['providerInstances']['claudeAgent']['config']['launchArgs'] = ''
+        self.settings.write_text(json.dumps(settings))
+        result = self.run_helper()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        restored = json.loads(self.settings.read_text())
+        self.assertEqual(
+            restored['providerInstances']['claudeAgent']['config']['launchArgs'],
+            '--add-dir base',
+        )
+
     def test_missing_t3_directory_is_a_noop(self):
         empty = Path(self.tmp.name) / 'empty'
         empty.mkdir()
-        result = subprocess.run(
-            [
-                sys.executable,
-                SCRIPT,
-                '--home', empty,
-                '--merger', self.merger,
-                '--settings-declaration', self.settings_declaration,
-                '--client-declaration', self.client_declaration,
-            ],
-            text=True,
-            capture_output=True,
-        )
+        result = self.run_helper(home=empty, hidden=())
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse((empty / '.t3').exists())
 
     def test_malformed_settings_leave_every_file_untouched(self):
         self.seed()
         self.settings.write_text('{', encoding='utf-8')
-        before = self.settings.read_bytes()
+        paths = [
+            self.settings,
+            self.client,
+            self.state,
+            self.userdata / 't3code-settings-ownership.json',
+            *sorted(self.instructions.iterdir()),
+        ]
+        before = {path: path.read_bytes() for path in paths}
         result = self.run_helper()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.settings.read_bytes(), before)
+        self.assertEqual({path: path.read_bytes() for path in paths}, before)
         self.assertFalse(self.marker.exists())
 
     def test_second_run_changes_nothing(self):

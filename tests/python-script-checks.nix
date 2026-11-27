@@ -5,9 +5,10 @@ let
       setup ? "",
       modules ? [ ],
       nativeBuildInputs ? [ ],
+      python ? pkgs.python3,
     }:
     name: script: test:
-    pkgs.runCommand "${name}-tests" { nativeBuildInputs = [ pkgs.python3 ] ++ nativeBuildInputs; } ''
+    pkgs.runCommand "${name}-tests" { nativeBuildInputs = [ python ] ++ nativeBuildInputs; } ''
       export PYTHONDONTWRITEBYTECODE=1
       mkdir -p scripts tests
       cp ${script} scripts/${baseNameOf script}${
@@ -33,20 +34,10 @@ in
         (import ../packages/gpg-tools.nix { inherit pkgs; }).restoreAgeIdentity
       }/bin/restore-age-identity"
       ./restore-age-identity.py;
-  retire-t3 =
-    pkgs.runCommand "retire-t3-tests"
-      {
-        nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.tomlkit ])) ];
-      }
-      ''
-        export PYTHONDONTWRITEBYTECODE=1
-        mkdir -p scripts tests
-        cp ${../scripts/retire-t3} scripts/retire-t3
-        cp ${../scripts/agent-settings} scripts/agent-settings
-        cp ${./test_retire_t3.py} tests/test_retire_t3.py
-        python tests/test_retire_t3.py
-        touch $out
-      '';
+  retire-t3 = pythonScriptCheckWith {
+    python = (import ../packages/agent-tools.nix { inherit pkgs; }).agentSettingsPython;
+    modules = [ ../scripts/agent-settings ];
+  } "retire-t3" ../scripts/retire-t3 ./test_retire_t3.py;
   overlay-release =
     pythonScriptCheck "overlay-release" ../scripts/overlay-release
       ./test_overlay_release.py;
