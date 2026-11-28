@@ -16,12 +16,12 @@
   - Applied in a scratch HOME over a seed that holds the owner's unpinned
     Compound Engineering plugin entry, another plugin, a user key, and a user
     model, the merge sets `update` to `disable` and `shell` to Nix Bash, leaves one pinned Compound
-    Engineering entry beside the other plugin, writes the Synthetic models Pi
-    shows with the rest disabled, writes every model of the Go snapshot and of the Anthropic list (disabling none), and
-    keeps the user's key and model. Running the activation in the scratch HOME
-    also proves the merger is aimed at that file and that a merger refusal fails
-    the activation. The expected values are computed here from
-    the raw lock, hidden list, and catalog files, not from the module.
+    Engineering entry beside the other plugin, writes every model of the Go
+    snapshot, declares no Synthetic or Anthropic model and creates no
+    Anthropic path, and keeps the user's key and models. Running the activation
+    in the scratch HOME also proves the merger is aimed at that file and that a
+    merger refusal fails the activation. The expected Go rows are computed here
+    from the raw snapshot, not from the module.
   - `opencodePlugin` runs after the settings. Executed against a recording
     stub, it passes exactly `plugin add <pinned spec>`, does nothing on a dry
     run, and warns without failing when the install fails.
@@ -55,70 +55,8 @@ let
   settingsFile = ".config/opencode/opencode.json";
 
   agents = ../home/h82/agents;
-  lockModels =
-    (builtins.fromJSON (builtins.readFile (agents + "/pi-model-lock.json"))).syntheticModelLocks.models;
-  hiddenIds = map (id: lib.removePrefix "synthetic/" id) (import (agents + "/pi-hidden-models.nix"));
-  syntheticRows = (builtins.fromJSON (builtins.readFile (agents + "/synthetic-catalog.json"))).data;
   goRows = (builtins.fromJSON (builtins.readFile (agents + "/opencode-go-catalog.json"))).data;
   pin = (import (agents + "/agent-plugin-pins.nix")).compound-engineering;
-
-  shownModels = builtins.filter (model: !(builtins.elem model.id hiddenIds)) lockModels;
-  shownIds = map (model: model.id) shownModels;
-  hiddenSynthetic = builtins.filter (id: !(builtins.elem id shownIds)) (
-    map (model: model.id) lockModels ++ map (row: row.id) syntheticRows
-  );
-
-  expectedSynthetic =
-    builtins.listToAttrs (
-      map (model: {
-        name = model.id;
-        value = {
-          name = model.name;
-          limit = {
-            context = model.contextWindow;
-            output = model.maxTokens;
-          };
-          cost = {
-            input = model.cost.input;
-            output = model.cost.output;
-            cache = {
-              read = model.cost.cacheRead;
-              write = model.cost.cacheWrite;
-            };
-          };
-        };
-      }) shownModels
-    )
-    // builtins.listToAttrs (
-      map (id: {
-        name = id;
-        value.disabled = true;
-      }) hiddenSynthetic
-    );
-
-  expectedList =
-    file: contextLimit:
-    builtins.listToAttrs (
-      map (model: {
-        name = model.id;
-        value = {
-          name = model.name;
-          limit = {
-            context = contextLimit model.contextWindow;
-            output = model.maxTokens;
-          };
-          cost = {
-            input = model.cost.input;
-            output = model.cost.output;
-            cache = {
-              read = model.cost.cacheRead;
-              write = model.cost.cacheWrite;
-            };
-          };
-        };
-      }) (builtins.fromJSON (builtins.readFile (agents + "/${file}"))).models
-    );
-  expectedAnthropic = expectedList "anthropic-models.json" lib.id;
 
   expectedGo = builtins.listToAttrs (
     map (row: {
@@ -176,7 +114,7 @@ let
           "synthetic"
           "models"
         ];
-        entries = expectedSynthetic;
+        entries = { };
       }
       {
         path = [
@@ -192,7 +130,7 @@ let
           "anthropic"
           "models"
         ];
-        entries = expectedAnthropic;
+        entries = { };
       }
     ];
   };
@@ -231,11 +169,11 @@ let
       pinnedSpec
     ];
     providers = {
-      synthetic.models = expectedSynthetic // {
+      synthetic.models = {
+        "hf:moonshotai/Kimi-K3".name = "stale name";
         my-own-model = userModel;
       };
       opencode-go.models = expectedGo;
-      anthropic.models = expectedAnthropic;
       custom.models.tiny.name = "Tiny";
     };
   };

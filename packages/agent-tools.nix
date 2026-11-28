@@ -94,8 +94,6 @@ let
     '';
   });
 
-  piRelease = releaseHelper "pi-release" ../scripts/pi-release;
-
   # Resolves the newest stable OpenCode v2 release from the GitHub release list.
   opencodeRelease = releaseHelper "opencode-release" ../scripts/opencode-release;
 
@@ -131,17 +129,9 @@ let
     meta.mainProgram = "npm-release";
   };
 
-  # Compares the Synthetic models in home/h82/agents/synthetic-models.nix with
-  # Synthetic's catalog, and rewrites the committed Synthetic catalog snapshot.
-  syntheticModelsWatch = catalogHelper "synthetic-models-watch" ../scripts/synthetic-models-watch;
-
   # Rewrites the committed OpenCode Go catalog snapshot from Go's public model
   # list.
   opencodeGoModelsWatch = catalogHelper "opencode-go-models-watch" ../scripts/opencode-go-models-watch;
-
-  # Rewrites the committed Anthropic model list that Pi and OpenCode declare,
-  # from the provider's model list and models.dev.
-  providerModelsWatch = catalogHelper "provider-models-watch" ../scripts/provider-models-watch;
 
   # Pins the Android SDK packages from Google's repository XML. It is Ruby
   # because it vendors nixpkgs' androidenv update.rb, which parses with
@@ -161,16 +151,13 @@ in
     claudeCodeRelease
     miseRelease
     preztoRelease
-    piRelease
     opencodeRelease
     opencodeAuthSync
     ompAuthSync
     opencodeServingModel
     ompRelease
     npmRelease
-    syntheticModelsWatch
     opencodeGoModelsWatch
-    providerModelsWatch
     androidSdkRelease
     ;
 }

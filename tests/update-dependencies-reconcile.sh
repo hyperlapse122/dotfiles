@@ -23,7 +23,7 @@ git_bin=$(command -v git)
 fix_branch=update-dependencies-fix
 
 wf_json=$(yq -o=json '.' "$workflow")
-[[ $(jq '.jobs | length' <<<"$wf_json") == 2 ]] || fail "expected maintenance and watch jobs"
+[[ $(jq '.jobs | length' <<<"$wf_json") == 1 ]] || fail "expected only the maintenance job"
 job=$(jq '.jobs["update-dependencies"] // empty' <<<"$wf_json")
 [[ -n $job ]] || fail "missing update-dependencies job in $workflow"
 
@@ -92,7 +92,6 @@ EOF
   printf '{"zshLock":{"archives":[{"commit":"1111111111111111111111111111111111111111"}]}}\n' >"$clone/packages/prezto-pin.json"
   printf '{"version": "2.3.1", "platforms": {}}\n' >"$clone/packages/opencode-release.json"
   printf '{"version": "19.1.1", "rev": "3333333333333333333333333333333333333333", "platforms": {}}\n' >"$clone/packages/omp-release.json"
-  printf '{"version": "1.4.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
   printf '{"version": "0.20.0"}\n' >"$clone/packages/acpx-release.json"
   printf '{"lockfileVersion": 3, "name": "acpx"}\n' >"$clone/packages/acpx/package-lock.json"
   printf 'base\n' >"$clone/tracked.txt"
@@ -187,14 +186,6 @@ case "\$*" in
     fi
     printf '{"tag": "v0.40.17"}\n' >packages/ollama-release.json
     ;;
-  "run .#pi-release -- --output packages/pi-release.json")
-    if [[ " \${FAIL_SOFT:-} " == *" pi "* ]]; then
-      printf '{"version": "partial' >packages/pi-release.json
-      echo "pi-release: release v1.5.0 has no pi-linux-arm64" >&2
-      exit 1
-    fi
-    printf '{"version": "1.5.0", "platforms": {}}\n' >packages/pi-release.json
-    ;;
   "run .#npm-release -- --package acpx --output packages/acpx-release.json --lock packages/acpx/package-lock.json")
     echo "acpx" >>"$clone/npm-calls.log"
     if [[ " \${FAIL_SOFT:-} " == *" acpx "* ]]; then
@@ -243,8 +234,6 @@ grep -q '"2.1.0"' "$clone/packages/claude-code-manifest.json" ||
 [[ $(jq -r .tag "$clone/packages/ollama-release.json") == v0.40.17 ]] || fail "Ollama updater did not run"
 grep -q '"2.3.2"' "$clone/packages/opencode-release.json" ||
   fail "update step did not update packages/opencode-release.json"
-grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
-  fail "update step did not update packages/pi-release.json"
 grep -q '"9.9.9"' "$clone/packages/acpx-release.json" &&
   grep -q '"new": true' "$clone/packages/acpx/package-lock.json" ||
   fail "update step did not update acpx pin and lock file"
@@ -290,20 +279,19 @@ grep -q 'the omp input locked 5555555555555555555555555555555555555555, but pack
   fail "update step did not name both omp revisions: $(cat "$scratch/update-omp-rev-mismatch-step.log")"
 pass 'the update step stops when the omp lock differs from the pinned revision'
 
-read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=opencode pi acpx ollama")"
+read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=opencode acpx ollama")"
 ((status == 0)) || fail "soft-failing updaters aborted the update step: $(cat "$scratch/update-soft-fail-step.log")"
-for title in "OpenCode update skipped" "Pi update skipped" "acpx update skipped" "Ollama update skipped"; do
+for title in "OpenCode update skipped" "acpx update skipped" "Ollama update skipped"; do
   grep -q "^::warning title=$title::" "$scratch/update-soft-fail-step.log" ||
     fail "missing warning for '$title': $(cat "$scratch/update-soft-fail-step.log")"
 done
 [[ -z $("$git_bin" -C "$clone" status --porcelain \
   packages/opencode-release.json \
   packages/ollama-release.json \
-  packages/pi-release.json \
   packages/acpx-release.json \
   packages/acpx/package-lock.json) ]] ||
   fail "soft-failing updaters left partial changes in their pin or lock files"
-pass 'soft-failing updaters (opencode, pi, acpx, ollama) warn, restore their files, and let the step continue'
+pass 'soft-failing updaters (opencode, acpx, ollama) warn, restore their files, and let the step continue'
 
 read -r status clone <<<"$(run_update_step update-claude-code-failure "FAIL_SOFT=claude-code")"
 ((status == 0)) || fail "a failing Claude Code release aborted the update step"
@@ -311,8 +299,8 @@ grep -q '^::warning title=Claude Code update skipped::.*manifest for 2.1.0 lacks
   fail "the Claude Code warning omitted the release error"
 [[ -z $("$git_bin" -C "$clone" status --porcelain packages/claude-code-manifest.json) ]] ||
   fail "a failing Claude Code release left a partial pin"
-grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
-  fail "a failing Claude Code release stopped the Pi update"
+grep -q '"2.3.2"' "$clone/packages/opencode-release.json" ||
+  fail "a failing Claude Code release stopped the OpenCode update"
 pass 'a failing Claude Code release warns, restores the manifest, and lets later updates continue'
 
 read -r status _ <<<"$(run_update_step update-bad-rev "LOCKED_REV=null")"
@@ -339,7 +327,6 @@ base_sha=$("$git_bin" -C "$clone" rev-parse HEAD)
 printf '{"version": "2.0.0"}\n' >"$clone/packages/ant-release.json"
 printf '{"tag": "v0.40.17"}\n' >"$clone/packages/ollama-release.json"
 printf '{"zshLock":{"archives":[{"commit":"2222222222222222222222222222222222222222"}]}}\n' >"$clone/packages/prezto-pin.json"
-printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
 printf '{"version": "0.21.0"}\n' >"$clone/packages/acpx-release.json"
 printf '{"version": "2.3.2", "platforms": {}}\n' >"$clone/packages/opencode-release.json"
 printf '{"version": "2.1.0"}\n' >"$clone/packages/claude-code-manifest.json"
@@ -351,12 +338,11 @@ sed -i 's/1111111111111111111111111111111111111111/22222222222222222222222222222
 (cd "$clone" && bash -e -c "$push_script") >"$scratch/pin-bumps-step.log" 2>&1 ||
   fail "the push step failed on the per-pin updates: $(tail -n 5 "$scratch/pin-bumps-step.log")"
 commits=$("$git_bin" -C "$clone" log --reverse --format='%H %s' "$base_sha..HEAD")
-[[ $(wc -l <<<"$commits") == 8 ]] || fail "expected 8 per-pin commits, found: $commits"
+[[ $(wc -l <<<"$commits") == 7 ]] || fail "expected 7 per-pin commits, found: $commits"
 for expected in \
   'chore(packages): bump ant to 2.0.0|packages/ant-release.json' \
   'chore(packages): refresh ollama-release|packages/ollama-release.json' \
   'chore(packages): refresh prezto to 222222222222|packages/prezto-pin.json' \
-  'chore(packages): bump pi to 1.5.0|packages/pi-release.json' \
   'chore(packages): bump claude-code to 2.1.0|packages/claude-code-manifest.json' \
   'chore(packages): bump acpx to 0.21.0|packages/acpx-release.json packages/acpx/package-lock.json' \
   'chore(packages): bump opencode to 2.3.2|packages/opencode-release.json' \
@@ -367,7 +353,7 @@ for expected in \
   files=$("$git_bin" -C "$clone" show --format= --name-only "$sha" | sort | paste -sd ' ')
   [[ $files == "$want" ]] || fail "'$subject' carries $files, want $want"
 done
-pass 'the Prezto, claude-code, opencode, ollama, pi, acpx, and compound-engineering changes each land as their own commit with only their files'
+pass 'the Prezto, claude-code, opencode, ollama, acpx, and compound-engineering changes each land as their own commit with only their files'
 read -r origin clone <<<"$(setup_clone omp-bump)"
 base_sha=$("$git_bin" -C "$clone" rev-parse HEAD)
 printf '{"version": "19.2.0", "rev": "4444444444444444444444444444444444444444", "platforms": {}}\n' >"$clone/packages/omp-release.json"

@@ -57,7 +57,7 @@ These commands construct a `judge` request with one question named `result`. The
 
 ## Use the MCP tool
 
-In a new managed Claude Code or Pi session, ask the agent to use the `decide` MCP server's `judge` tool. Pass the same Decisions request fields shown above. If the request omits `model`, the tool uses the configured default. Successful results include the full Decisions response, and service errors are reported as tool errors.
+In a new managed Claude Code session, ask the agent to use the `decide` MCP server's `judge` tool. Pass the same Decisions request fields shown above. If the request omits `model`, the tool uses the configured default. Successful results include the full Decisions response, and service errors are reported as tool errors.
 
 The harness starts `decide-mcp` over stdio. That process and the terminal CLI connect to the same private Unix socket. The user service loads the model and runs inference for both. If the tool reports that it cannot reach the service, check the service status and the socket configured for that user.
 

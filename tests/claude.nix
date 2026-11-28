@@ -170,7 +170,22 @@ let
     }
   ];
 
-  merges = decideCommand: hookGroups: [
+  # The retired guard hook's identity, declared with every event empty so the
+  # merger deletes the handler earlier generations wrote.
+  hookGroups = {
+    identity = {
+      statusMessage = "Dotfiles agent quality";
+      commandPrefix = "/nix/store/";
+      commandSuffix = "-agent-quality-hook/bin/agent-quality-hook";
+    };
+    events = {
+      PreToolUse = { };
+      PostToolUse = { };
+      Stop = { };
+    };
+  };
+
+  merges = decideCommand: [
     (rec {
       attr = "claudeSettings";
       file = ".claude/settings.json";
@@ -208,11 +223,6 @@ let
         userConfig.home.packages or [ ]
       );
       decideCommand = if decide == null then "/missing/bin/decide-mcp" else "${decide}/bin/decide-mcp";
-      quality = import ../home/h82/agents/quality-hooks.nix {
-        config = userConfig;
-        inherit pkgs lib;
-        harness = "claude";
-      };
       sessionVariables = userConfig.home.sessionVariables or { };
 
       environmentChecks = lib.concatStringsSep "\n" (
@@ -305,6 +315,27 @@ let
             }
             // lib.optionalAttrs (merge.attr == "claudeSettings") {
               seed = {
+                hooks.PreToolUse = [
+                  {
+                    matcher = "^(Edit|Write|MultiEdit|Bash)$";
+                    hooks = [
+                      {
+                        type = "command";
+                        command = "/nix/store/0000000000000000000000000000000-agent-quality-hook/bin/agent-quality-hook policy claude pre";
+                        statusMessage = "Dotfiles agent quality";
+                      }
+                    ];
+                  }
+                  {
+                    matcher = "Bash";
+                    hooks = [
+                      {
+                        type = "command";
+                        command = "/home/owner/bin/my-hook";
+                      }
+                    ];
+                  }
+                ];
                 activationUnmanaged = "keep";
                 language = "english";
                 autoMemoryEnabled = true;
@@ -342,9 +373,17 @@ let
                 };
               };
               expected = {
-                hooks = lib.mapAttrs (_: group: [ group ]) (
-                  lib.filterAttrs (_: group: group != { }) quality.hookGroups.events
-                );
+                hooks.PreToolUse = [
+                  {
+                    matcher = "Bash";
+                    hooks = [
+                      {
+                        type = "command";
+                        command = "/home/owner/bin/my-hook";
+                      }
+                    ];
+                  }
+                ];
                 activationUnmanaged = "keep";
                 autoCompactWindow = "retired";
                 language = "korean";
@@ -429,7 +468,7 @@ let
     in
     ''
       ${environmentChecks}
-      ${lib.concatMapStringsSep "\n" mergeChecks (merges decideCommand quality.hookGroups)}
+      ${lib.concatMapStringsSep "\n" mergeChecks (merges decideCommand)}
     '';
 
   # environment.etc exists only on a NixOS system configuration, so this one

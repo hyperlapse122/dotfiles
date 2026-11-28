@@ -1,4 +1,4 @@
-name: Update dependencies and model catalogs
+name: Update dependencies and the model catalog
 "on":
   schedule:
     - cron: 7,37 * * * *
@@ -13,7 +13,6 @@ name: Update dependencies and model catalogs
           - all
           - dependencies
           - catalogs
-          - drift
 concurrency:
   group: update-dependencies
   cancel-in-progress: false
@@ -21,7 +20,6 @@ permissions:
   contents: read
 jobs:
   update-dependencies:
-    if: "!cancelled() && (github.event_name == 'schedule' || inputs.part != 'drift')"
     runs-on: ubuntu-24.04
     timeout-minutes: 260
     steps:
@@ -67,34 +65,6 @@ jobs:
         id: prepare_catalogs
         if: "!cancelled() && (github.event_name == 'schedule' || inputs.part == 'all' || inputs.part == '' || inputs.part == 'catalogs') && steps.initialize.outcome == 'success'"
         continue-on-error: true
-      - name: Refresh the Synthetic catalog snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          snapshot=home/h82/agents/synthetic-catalog.json
-          if [ -z "${SYNTHETIC_API_KEY:-}" ]; then
-            echo '::warning::SYNTHETIC_API_KEY is not set; keeping the current catalog snapshot.'
-            exit 1
-          fi
-          if ! nix run .#synthetic-models-watch -- --snapshot "$snapshot"; then
-            git restore -- "$snapshot"
-            echo '::warning::Catalog refresh failed; keeping the committed snapshot.'
-            exit 1
-          fi
-          if [ -n "$(git status --porcelain -- "$snapshot")" ]; then
-            git add -- "$snapshot"
-            git commit -m 'chore(agents): refresh the synthetic catalog snapshot' -- "$snapshot"
-            echo 'changed=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'changed=false' >> "$GITHUB_OUTPUT"
-          fi
-        id: catalog
-        if: "!cancelled() && steps.prepare_catalogs.outcome == 'success'"
-        continue-on-error: true
-        working-directory: ${{ runner.temp }}/updates/catalogs
-        timeout-minutes: 20
-        env:
-          SYNTHETIC_API_KEY: ${{ secrets.SYNTHETIC_API_KEY }}
       - name: Refresh the OpenCode Go catalog snapshot
         shell: bash
         run: |
@@ -117,41 +87,13 @@ jobs:
         continue-on-error: true
         working-directory: ${{ runner.temp }}/updates/catalogs
         timeout-minutes: 10
-      - name: Refresh the Anthropic model list
-        shell: bash
-        run: |
-          set -euo pipefail
-          snapshot=home/h82/agents/anthropic-models.json
-          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-            echo '::warning::ANTHROPIC_API_KEY is not set; keeping the current Anthropic model list.'
-            exit 1
-          fi
-          if ! nix run .#provider-models-watch -- --provider anthropic --snapshot "$snapshot"; then
-            git restore -- "$snapshot"
-            echo '::warning::Anthropic model list refresh failed; keeping the committed snapshot.'
-            exit 1
-          fi
-          if [ -n "$(git status --porcelain -- "$snapshot")" ]; then
-            git add -- "$snapshot"
-            git commit -m 'chore(agents): refresh the anthropic model list' -- "$snapshot"
-            echo 'changed=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'changed=false' >> "$GITHUB_OUTPUT"
-          fi
-        id: anthropic_models
-        if: "!cancelled() && steps.prepare_catalogs.outcome == 'success'"
-        continue-on-error: true
-        working-directory: ${{ runner.temp }}/updates/catalogs
-        timeout-minutes: 5
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       - name: Publish verified catalogs
         shell: bash
         run: |
           set -euo pipefail
           bash "$GITHUB_WORKSPACE/scripts/ci-update-publish" catalogs "$RUNNER_TEMP/updates/catalogs-logs"
         id: publish_catalogs
-        if: "!cancelled() && (steps.catalog.outputs.changed == 'true' || steps.go_catalog.outputs.changed == 'true' || steps.anthropic_models.outputs.changed == 'true')"
+        if: "!cancelled() && steps.go_catalog.outputs.changed == 'true'"
         continue-on-error: true
         working-directory: ${{ runner.temp }}/updates/catalogs
         timeout-minutes: 40
@@ -251,9 +193,6 @@ jobs:
           # 6. Update mise
           nix run .#mise-release -- --output packages/mise-release.json
 
-          # 9. Update Pi
-          update_harness_release pi Pi packages/pi-release.json
-
           # 10. Update acpx
           if ! nix run .#npm-release -- --package acpx \
             --output packages/acpx-release.json \
@@ -311,7 +250,6 @@ jobs:
 
           commit_if_pin_changed claude-desktop packages/claude-desktop-version.json
           commit_if_pin_changed claude-code packages/claude-code-manifest.json
-          commit_if_pin_changed pi packages/pi-release.json
           if [ -n "$(git status --porcelain -- packages/acpx-release.json packages/acpx/package-lock.json)" ]; then
             commit_version acpx packages/acpx-release.json packages/acpx/package-lock.json
           fi
@@ -460,12 +398,10 @@ jobs:
           set -euo pipefail
           {
             echo '## Maintenance results'
-            printf 'Catalog refresh: %s; changed: %s; publication: %s\n' "$CATALOG" "$CATALOG_CHANGED" "$CATALOG_PUSH"
-            printf 'OpenCode Go catalog refresh: %s; changed: %s\n' "$GO_CATALOG" "$GO_CATALOG_CHANGED"
-            printf 'Anthropic model list refresh: %s; changed: %s\n' "$ANTHROPIC_MODELS" "$ANTHROPIC_MODELS_CHANGED"
+            printf 'OpenCode Go catalog refresh: %s; changed: %s; publication: %s\n' "$GO_CATALOG" "$GO_CATALOG_CHANGED" "$CATALOG_PUSH"
             printf 'Dependencies: %s; changed: %s; publication: %s; reconciliation: %s\n' "$DEPENDENCIES" "$DEPENDENCIES_CHANGED" "$DEPENDENCIES_PUSH" "$RECONCILE"
           } >> "$GITHUB_STEP_SUMMARY"
-          for outcome in "$PREPARE_CATALOGS" "$PREPARE_DEPENDENCIES" "$CATALOG" "$GO_CATALOG" "$ANTHROPIC_MODELS" "$CATALOG_PUSH" "$DEPENDENCIES" "$COMMIT" "$DEPENDENCIES_PUSH" "$RECONCILE" "$CLEANUP"; do
+          for outcome in "$PREPARE_CATALOGS" "$PREPARE_DEPENDENCIES" "$GO_CATALOG" "$CATALOG_PUSH" "$DEPENDENCIES" "$COMMIT" "$DEPENDENCIES_PUSH" "$RECONCILE" "$CLEANUP"; do
             if [ "$outcome" = failure ] || [ "$outcome" = cancelled ]; then
               exit 1
             fi
@@ -474,12 +410,8 @@ jobs:
         env:
           PREPARE_CATALOGS: ${{ steps.prepare_catalogs.outcome }}
           PREPARE_DEPENDENCIES: ${{ steps.prepare_dependencies.outcome }}
-          CATALOG: ${{ steps.catalog.outcome }}
-          CATALOG_CHANGED: ${{ steps.catalog.outputs.changed }}
           GO_CATALOG: ${{ steps.go_catalog.outcome }}
           GO_CATALOG_CHANGED: ${{ steps.go_catalog.outputs.changed }}
-          ANTHROPIC_MODELS: ${{ steps.anthropic_models.outcome }}
-          ANTHROPIC_MODELS_CHANGED: ${{ steps.anthropic_models.outputs.changed }}
           CATALOG_PUSH: ${{ steps.publish_catalogs.outcome }}
           DEPENDENCIES: ${{ steps.update.outcome }}
           DEPENDENCIES_CHANGED: ${{ steps.update.outputs.changed }}
@@ -487,116 +419,3 @@ jobs:
           DEPENDENCIES_PUSH: ${{ steps.publish_dependencies.outcome }}
           RECONCILE: ${{ steps.reconcile.outcome }}
           CLEANUP: ${{ steps.cleanup.outcome }}
-  watch:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          persist-credentials: false
-          ref: main
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
-      - name: Compare with Synthetic's catalog
-        id: compare
-        env:
-          SYNTHETIC_API_KEY: ${{ secrets.SYNTHETIC_API_KEY }}
-        run: |
-          set -euo pipefail
-          nix run .#synthetic-models-watch -- \
-            --result "$RUNNER_TEMP/watch.json" \
-            --issue-body "$RUNNER_TEMP/issue.md"
-        shell: bash
-      - name: Open, update, or close the reconcile issue
-        if: ${{ !cancelled() && (steps.compare.outcome == 'success' || steps.compare.outcome == 'failure') }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          LABEL: model-reconcile
-          COMPARE_OUTCOME: ${{ steps.compare.outcome }}
-        run: |
-          set -euo pipefail
-          watch() { nix run .#synthetic-models-watch -- "$@"; }
-          result="$RUNNER_TEMP/watch.json"
-          body="$RUNNER_TEMP/issue.md"
-
-          # The oldest open issue is the reconcile issue; any other is closed.
-          gh issue list --repo "$GITHUB_REPOSITORY" --label "$LABEL" --state open \
-            --json number --limit 100 > "$RUNNER_TEMP/open.json"
-          number=$(jq -r 'map(.number) | sort | .[0] // ""' "$RUNNER_TEMP/open.json")
-          duplicates=$(jq -r 'map(.number) | sort | .[1:] | .[]' "$RUNNER_TEMP/open.json")
-          for duplicate in $duplicates; do
-            printf 'Closing as a duplicate of #%s, the reconcile issue this workflow keeps.\n' "$number" \
-              > "$RUNNER_TEMP/duplicate.md"
-            gh issue comment "$duplicate" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/duplicate.md"
-            gh issue close "$duplicate" --repo "$GITHUB_REPOSITORY"
-          done
-
-          if [ -n "$number" ]; then
-            gh issue view "$number" --repo "$GITHUB_REPOSITORY" --json body,comments > "$RUNNER_TEMP/open-issue.json"
-            watch --issue-state "$RUNNER_TEMP/open-issue.json" > "$RUNNER_TEMP/state.json"
-          else
-            printf '{}\n' > "$RUNNER_TEMP/state.json"
-          fi
-          previous=$(jq -r '.fingerprint // ""' "$RUNNER_TEMP/state.json")
-          previous_digest=$(jq -r '.bodyDigest // ""' "$RUNNER_TEMP/state.json")
-          notice=$(jq -r '.notice // ""' "$RUNNER_TEMP/state.json")
-
-          if [ "$COMPARE_OUTCOME" != success ]; then
-            # One comment per failure streak; with no open issue, the failed
-            # run is the signal.
-            if [ -n "$number" ] && [ "$notice" != unreachable ]; then
-              watch --notice unreachable > "$RUNNER_TEMP/notice.md"
-              gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/notice.md"
-            fi
-            echo "the comparison with Synthetic's catalog failed" >&2
-            exit 1
-          fi
-
-          status=$(jq -r '.status' "$result")
-          fingerprint=$(jq -r '.fingerprint // ""' "$result")
-          digest=$(jq -r '.bodyDigest // ""' "$result")
-
-          case "$status" in
-            drift)
-              title=$(jq -r '.title' "$result")
-              if [ -z "$number" ]; then
-                gh label create "$LABEL" --repo "$GITHUB_REPOSITORY" --force \
-                  --color B60205 --description 'Synthetic model drift for home/h82/agents/synthetic-models.nix'
-                gh issue create --repo "$GITHUB_REPOSITORY" --label "$LABEL" \
-                  --title "$title" --body-file "$body"
-              else
-                if [ "$previous" != "$fingerprint" ]; then
-                  gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body"
-                  {
-                    printf 'The drift changed; the issue body now reads:\n\n'
-                    head -n 1 "$body"
-                  } > "$RUNNER_TEMP/changed.md"
-                  gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/changed.md"
-                elif [ "$previous_digest" != "$digest" ]; then
-                  # Same drift, new details: refresh the body without a comment.
-                  gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body"
-                else
-                  echo "Issue #$number already reports this drift."
-                fi
-                if [ "$notice" = unreachable ]; then
-                  watch --notice reachable > "$RUNNER_TEMP/notice.md"
-                  gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/notice.md"
-                fi
-              fi
-              ;;
-            clean)
-              if [ -n "$number" ]; then
-                printf 'No Synthetic model drift remains as of commit %s.\n' "$(git rev-parse HEAD)" > "$RUNNER_TEMP/resolved.md"
-                gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/resolved.md"
-                gh issue close "$number" --repo "$GITHUB_REPOSITORY"
-              fi
-              ;;
-            *)
-              echo "unexpected watch status: $status" >&2
-              exit 1
-              ;;
-          esac
-        shell: bash
-    permissions:
-      contents: read
-      issues: write
-    if: "!cancelled() && (github.event_name == 'schedule' || inputs.part == 'all' || inputs.part == '' || inputs.part == 'drift')"

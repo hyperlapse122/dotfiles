@@ -5,10 +5,6 @@
   ...
 }:
 let
-  quality = import ./quality-hooks.nix {
-    inherit config pkgs lib;
-    harness = "opencode";
-  };
   opencode = import ../../../packages/opencode.nix { inherit pkgs; };
   tools = import ../../../packages/agent-tools.nix { inherit pkgs; };
   merger = "${tools.agentSettings}/bin/agent-settings";
@@ -16,47 +12,6 @@ let
   settingsFile = "${config.home.homeDirectory}/.config/opencode/opencode.json";
 
   keyDirectory = config.my.secrets.stateDir;
-
-  # Synthetic shows the models Pi shows: the lock minus Pi's hidden set.
-  # Every other model either source names is disabled, so a catalog that
-  # grows or a hidden model OpenCode's own catalog adds never appears.
-  lock = (builtins.fromJSON (builtins.readFile ./pi-model-lock.json)).syntheticModelLocks;
-  hiddenIds = map (lib.removePrefix "synthetic/") (import ./pi-hidden-models.nix);
-  syntheticCatalog = (builtins.fromJSON (builtins.readFile ./synthetic-catalog.json)).data;
-  visibleModels = lib.filter (model: !(lib.elem model.id hiddenIds)) lock.models;
-  visibleIds = map (model: model.id) visibleModels;
-  hiddenCandidates = lib.unique (
-    map (model: model.id) lock.models ++ map (row: row.id) syntheticCatalog
-  );
-
-  # A model row in Pi's models.json shape, as OpenCode declares it.
-  openCodeModel = model: {
-    inherit (model) name;
-    limit = {
-      context = model.contextWindow;
-      output = model.maxTokens;
-    };
-    cost = {
-      inherit (model.cost) input output;
-      cache = {
-        read = model.cost.cacheRead;
-        write = model.cost.cacheWrite;
-      };
-    };
-  };
-  declaredModels =
-    models: lib.listToAttrs (map (model: lib.nameValuePair model.id (openCodeModel model)) models);
-
-  # Anthropic shows the same committed list as Pi. OpenCode's own catalog
-  # keeps every other Anthropic model.
-  anthropicModels = declaredModels (builtins.fromJSON (builtins.readFile ./anthropic-models.json))
-    .models;
-
-  syntheticModels =
-    declaredModels visibleModels
-    // lib.genAttrs (lib.subtractLists visibleIds hiddenCandidates) (_: {
-      disabled = true;
-    });
 
   # OpenCode's own catalog already routes each Go model over the protocol it
   # is served on, so the snapshot only sets the limits and prices.
@@ -103,13 +58,17 @@ let
         }
       ];
       ownEntries = [
+        # OpenCode's own catalog lists the Synthetic and Anthropic models. The
+        # empty sets remove the rows earlier generations declared, including
+        # the disabled rows that hid catalog models; delete them once every
+        # host has applied them.
         {
           path = [
             "providers"
             "synthetic"
             "models"
           ];
-          entries = syntheticModels;
+          entries = { };
         }
         {
           path = [
@@ -125,7 +84,7 @@ let
             "anthropic"
             "models"
           ];
-          entries = anthropicModels;
+          entries = { };
         }
       ];
     }
@@ -136,9 +95,6 @@ in
     opencode
     tools.opencodeServingModel
   ];
-  xdg.configFile."opencode/plugins/dotfiles-agent-quality.ts" = lib.mkIf quality.enable {
-    source = quality.renderExtension ./opencode-quality.ts;
-  };
   my.agents.crossModelPeers = [ "opencode" ];
 
   # OpenCode rewrites its own config (`plugin add` and the settings it saves),

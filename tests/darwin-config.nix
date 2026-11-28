@@ -323,7 +323,7 @@ let
       # literals, so a mutated registry or root cannot move the expectation.
       koreanRoots = [
         ".claude/skills"
-        ".pi/agent/skills"
+        ".omp/agent/skills"
         ".config/opencode/skills"
       ];
       domainTargets = lib.concatMap (
@@ -352,7 +352,7 @@ let
       koreanElsewhere = lib.filter (underDir ".agents/skills") enabledTargets;
       xcodeRoots = [
         ".claude/skills"
-        ".pi/agent/skills"
+        ".omp/agent/skills"
         ".config/opencode/skills"
       ];
       xcodeStep = name: activation.${name} or { };

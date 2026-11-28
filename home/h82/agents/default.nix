@@ -8,7 +8,6 @@
   ];
   imports = [
     ./agent-check.nix
-    ./agent-hooks.nix
     ./agent-plugins.nix
     ./claude.nix
     ./cross-model-peers.nix
@@ -16,7 +15,6 @@
     ./opencode.nix
     ./omp.nix
     ./official-skills.nix
-    ./pi.nix
     ./instructions
     ./korean-skills.nix
     ./pinned-skills.nix

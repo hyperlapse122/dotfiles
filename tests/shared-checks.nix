@@ -18,7 +18,6 @@ in
         python3 ${./agent-check.py} "$PWD/scripts/agent-check"
         touch "$out"
       '';
-  agent-hooks = import ./agent-hooks.nix { inherit pkgs; };
   project-skills =
     let
       module = import ../home/h82/agents/tanstack-intent.nix { inherit pkgs; };

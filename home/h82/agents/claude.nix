@@ -6,10 +6,6 @@
   ...
 }:
 let
-  quality = import ./quality-hooks.nix {
-    inherit config pkgs lib;
-    harness = "claude";
-  };
   streamTimeoutEnabled =
     config.my.kind == "darwin" && config.my.networkRecovery.enable && !config.my.bootstrap;
   merger = "${
@@ -139,13 +135,29 @@ let
   # the entry once every host has rebuilt past it.
   retiredKeys = [ ];
 
+  # The retired edit and shell guard hook. The merger reconciles hooks only
+  # while a group is declared, so this identity stays with every event empty
+  # until each host has removed the handler it wrote; then delete it.
+  retiredHookGroups = {
+    identity = {
+      statusMessage = "Dotfiles agent quality";
+      commandPrefix = "/nix/store/";
+      commandSuffix = "-agent-quality-hook/bin/agent-quality-hook";
+    };
+    events = {
+      PreToolUse = { };
+      PostToolUse = { };
+      Stop = { };
+    };
+  };
+
   renderDeclared =
     name: set: remove: setPaths:
     pkgs.writeText name (
       builtins.toJSON {
         inherit set remove setPaths;
         ownEntries = marketplaceEntries;
-        inherit (quality) hookGroups;
+        hookGroups = retiredHookGroups;
       }
     );
 

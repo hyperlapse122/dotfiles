@@ -7,7 +7,7 @@ let
   configurations = import ./lib/configurations.nix { inherit pkgs self; };
   roots = [
     ".claude/skills"
-    ".pi/agent/skills"
+    ".omp/agent/skills"
     ".config/opencode/skills"
   ];
   homes = map (entry: entry.user.home-files or null) configurations.userEntries;

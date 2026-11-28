@@ -23,7 +23,6 @@ let
         cudaSupport = config.my.cuda.enable;
       };
       service = "${toString units}/ollama.service";
-      provision = "${toString units}/ollama-provision.service";
       hasPackage = builtins.any (p: toString p == toString package) config.environment.systemPackages;
     in
     ''
@@ -45,23 +44,8 @@ let
           "Restart=on-failure"
         ]
       }
-      ${lib.concatMapStrings
-        (line: ''
-          grep -Fx -- ${esc line} ${esc provision} >/dev/null || { echo ${esc "${name}: missing provisioning setting ${line}"} >&2; exit 1; }
-        '')
-        [
-          "ConditionUser=${user}"
-          "After=ollama.service"
-          "DefaultDependencies=false"
-          "StartLimitIntervalSec=0"
-          "Type=oneshot"
-          "Restart=on-failure"
-          "RestartSec=30"
-        ]
-      }
-      for unit in ollama.service ollama-provision.service; do
-        [ "$(readlink ${esc "${toString units}/default.target.wants"}/"$unit")" = "../$unit" ] || { echo ${esc "${name}: default.target does not want Ollama services"} >&2; exit 1; }
-      done
+      [ "$(readlink ${esc "${toString units}/default.target.wants/ollama.service"})" = "../ollama.service" ] || { echo ${esc "${name}: default.target does not want the Ollama server"} >&2; exit 1; }
+      [ ! -e ${esc "${toString units}/ollama-provision.service"} ] || { echo ${esc "${name}: the retired model provisioning unit is still declared"} >&2; exit 1; }
     '';
   assertBootstrap =
     entry:

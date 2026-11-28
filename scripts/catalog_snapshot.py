@@ -1,4 +1,4 @@
-"""What synthetic-models-watch, opencode-go-models-watch, and openrouter-catalog-snapshot share.
+"""Snapshot helpers for the catalog watch scripts, such as opencode-go-models-watch.
 
 Each script keeps its own row validation, defaults, retries, and rule for a
 missing key; this module holds the JSON I/O, the snapshot write and shrink

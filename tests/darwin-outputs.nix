@@ -12,26 +12,25 @@ let
     import json, os, plistlib, subprocess, sys, tempfile
     from pathlib import Path
 
-    generation, original, enabled, provision = Path(sys.argv[1]), sys.argv[2], sys.argv[3] == "1", sys.argv[4]
+    generation, original, enabled = Path(sys.argv[1]), sys.argv[2], sys.argv[3] == "1"
     body = (generation / "activate").read_text()
     note = '_iNote "Activating %s" "ollamaSettings"\n'
     agents = generation / "LaunchAgents"
-    paths = [agents / f"org.nix-community.home.ollama-{name}.plist" for name in ("bootstrap", "provision")]
+    path = agents / "org.nix-community.home.ollama-bootstrap.plist"
     assert (note in body) == enabled
-    assert all(path.exists() == enabled for path in paths)
+    assert path.exists() == enabled
+    assert not (agents / "org.nix-community.home.ollama-provision.plist").exists()
     if enabled:
         assert body.index(note) < body.index('_iNote "Activating %s" "setupLaunchAgents"\n')
-        plists = [plistlib.loads(path.read_bytes()) for path in paths]
-        for plist in plists:
-            assert plist["LimitLoadToSessionType"] == "Aqua"
-            assert plist["RunAtLoad"] is True and plist["KeepAlive"] == {"SuccessfulExit": False}
-            assert plist["ThrottleInterval"] == 60
+        plist = plistlib.loads(path.read_bytes())
+        assert plist["LimitLoadToSessionType"] == "Aqua"
+        assert plist["RunAtLoad"] is True and plist["KeepAlive"] == {"SuccessfulExit": False}
+        assert plist["ThrottleInterval"] == 60
         def launch_executable(plist):
             shell, flag, command = plist["ProgramArguments"]
             prefix = "/bin/wait4path /nix/store && exec "
             assert [shell, flag] == ["/bin/sh", "-c"] and command.startswith(prefix)
             return Path(command.removeprefix(prefix))
-        assert launch_executable(plists[1]) == Path(provision)
         step = body.split(note, 1)[1].split('_iNote "Activating %s"', 1)[0]
         with tempfile.TemporaryDirectory() as scratch:
             root = Path(scratch)
@@ -55,7 +54,7 @@ let
             stub.write_text('#!/bin/sh\nprintf "called\\n" >> "$CALLS"\nexit "''${OPEN_STATUS:-0}"\n')
             stub.chmod(0o755)
             env["CALLS"] = str(calls)
-            bootstrap = launch_executable(plists[0]).read_text().replace("/usr/bin/open", str(stub))
+            bootstrap = launch_executable(plist).read_text().replace("/usr/bin/open", str(stub))
             assert str(stub) in bootstrap
             env["OPEN_STATUS"] = "1"
             assert subprocess.run(["bash", "-c", bootstrap], env=env).returncode != 0 and not marker.exists()
@@ -122,7 +121,6 @@ let
         }
       )
       [
-        ./pi.nix
         ./claude.nix
         ./agent-plugins.nix
         ./korean-skills.nix
@@ -297,7 +295,7 @@ let
           lib.escapeShellArgs (
             map (root: "--root ${lib.escapeShellArg "${user.home.homeDirectory}/${root}"}") [
               ".claude/skills"
-              ".pi/agent/skills"
+              ".omp/agent/skills"
               ".config/opencode/skills"
             ]
           )
@@ -517,16 +515,7 @@ let
       # bootstrap has neither.
       nrdaemon=$sys/Library/LaunchDaemons/org.nixos.network-recovery.plist
       python3 ${streamTimeoutEffects} "$gen" "$production" || bad "Claude GUI timeout lifecycle failed"
-      python3 ${ollamaEffects} "$gen" ${lib.escapeShellArg user.home.homeDirectory} "$production" ${
-        lib.escapeShellArg (
-          lib.getExe (
-            import ../packages/ollama-provision.nix {
-              inherit pkgs;
-              kind = "darwin";
-            }
-          )
-        )
-      } || bad "Ollama setup lifecycle failed"
+      python3 ${ollamaEffects} "$gen" ${lib.escapeShellArg user.home.homeDirectory} "$production" || bad "Ollama setup lifecycle failed"
       nrrotate=$sys/etc/newsyslog.d/network-recovery.conf
       if [ "$production" = 1 ]; then
         nrarg() { /usr/bin/plutil -extract "$1" raw "$nrdaemon" 2>/dev/null || true; }

@@ -48,7 +48,7 @@ The flake builds two outputs for each macOS host, `darwinConfigurations.<host>` 
 - **Containers.** Apple's `container` CLI (`modules/darwin/container.nix`), with no Podman machine and no automatic minikube cluster; see [Containers](#containers).
 - **Fonts.** The shared font list (`modules/shared/font-packages.nix` and `packages/overlay-fonts.nix`, including Pretendard, Jetendard, D2Coding, Monoplex KR, Noto CJK, and Twemoji) is installed system-wide.
 - **Dock and system defaults.** `modules/darwin/defaults.nix` enables automatic light/dark appearance (`AppleInterfaceStyleSwitchesAutomatically = true`). `modules/darwin/dock.nix` sets tile size `32`, hides recent applications (`show-recents = false`), pins `~/Downloads` on the right side of the Dock, and replaces `persistent-apps` on each apply. The Dock starts with the system-owned Finder, Apps, Google Chrome, and App Store. Its personal apps include Messages, KakaoTalk, Telegram Desktop, FaceTime, and Phone in that order. The host's `my.dock.hostApps` follow the personal apps and precede Ghostty, followed by Claude. The module defines the complete ordered list.
-- **User environment.** zsh (Prezto modules and completions), Ghostty (`Jetendard`), Git with YubiKey OpenPGP signing via `gpg-git` and `dotfiles-pinentry`, `.NET` 8 and 10, Rust (`rustup`), C++/CMake/Ninja/`vcpkg`, Bun, `mise`, `gh`, `glab`, `tokscale`, and the managed coding agents (Claude Code, Pi `1.5.0`, and OpenCode `2.3.2`). See [App notes](#app-notes).
+- **User environment.** zsh (Prezto modules and completions), Ghostty (`Jetendard`), Git with YubiKey OpenPGP signing via `gpg-git` and `dotfiles-pinentry`, `.NET` 8 and 10, Rust (`rustup`), C++/CMake/Ninja/`vcpkg`, Bun, `mise`, `gh`, `glab`, `tokscale`, and the managed coding agents (Claude Code, OpenCode `2.4.2`, and omp `19.2.1`). See [App notes](#app-notes).
 
 ## First setup on the Mac
 
@@ -141,7 +141,7 @@ Run these steps on the Mac, in order, from a local GUI login session, never over
     The production switch:
     - decrypts `secrets/hosts/<host>/tls-inspection-ca.yaml` into `/etc/ssl/nix-config/` and ensures macOS admin SSL trust when `my.tlsInspectionCa.enable` is on (approve the macOS authorization dialog if prompted);
     - installs and selects Xcode through `xcodes` using the Apple Account decrypted in memory from `secrets/hosts/<host>/apple-account.yaml` (complete any interactive Apple Account 2FA or `sudo` prompt if asked);
-    - publishes the CLI tokens, `gh` and `glab` configuration, the Synthetic and Anthropic keys Pi uses, OpenCode's Synthetic, OpenCode Go, and Anthropic keys, omp's Synthetic, OpenRouter, Anthropic, OpenCode Go, and Exa keys, and the host SSH key (see [Secrets and authentication](#secrets-and-authentication));
+    - publishes the CLI tokens, `gh` and `glab` configuration, OpenCode's Synthetic, OpenCode Go, and Anthropic keys, omp's Synthetic, OpenRouter, Anthropic, OpenCode Go, and Exa keys, and the host SSH key (see [Secrets and authentication](#secrets-and-authentication));
     - records `variant=production` in `/etc/nix-config-host`.
 
 13. **Exclude the host SSH private key from Time Machine by path.** Because `host-secrets` replaces `~/.ssh/id_ed25519_nix_config` atomically on every apply, a sticky file exclusion would be lost on the next switch; use a fixed-path exclusion (`-p`) with `sudo`:
@@ -202,7 +202,6 @@ Production activation publishes:
 
 - `gh` and `glab` configuration under `~/.config/gh` and `~/.config/glab-cli`;
 - CLI and registry tokens under `~/.local/state/cli-auth/` (`github_token`, `gitlab_token`, `jpi_token`, `tokscale_token`, `synthetic_api_key`, `exa_api_key`, `openrouter_api_key`, `opencode_go_api_key`, `anthropic_api_key`);
-- the `synthetic` and `anthropic` provider keys in `~/.pi/agent/auth.json`;
 - the `synthetic`, `opencode-go`, and `anthropic` credentials in OpenCode's credential store, under the label `nix-config`;
 - the `synthetic`, `openrouter`, `anthropic`, `opencode-go`, and `exa` API keys in omp's credential store, where an OAuth login for the same provider still takes precedence;
 - the host SSH private key at `~/.ssh/id_ed25519_nix_config`.
@@ -326,7 +325,7 @@ Remove temporary containers, images, volumes, networks, and build caches as soon
 
 Every production apply exports the selected Xcode's agent skills after the Xcode step. The export is stored in `~/.local/state/nix-config/xcode-skills` and linked into all three managed skill roots. If export fails or is empty, activation warns once, keeps the previous skills, and retries on the next apply. A declared skill wins a name collision, which produces one warning.
 
-To remove the skills by hand, delete the links pointing into the state directory from `~/.claude/skills`, `~/.pi/agent/skills`, and `~/.config/opencode/skills`, then delete the state directory. The next production apply reinstalls them.
+To remove the skills by hand, delete the links pointing into the state directory from `~/.claude/skills`, `~/.omp/agent/skills`, and `~/.config/opencode/skills`, then delete the state directory. The next production apply reinstalls them.
 
 Repository checks cover the helper and its wiring. Check on the Mac that a signed-in harness session lists the skills, including once with the Xcode app closed.
 
