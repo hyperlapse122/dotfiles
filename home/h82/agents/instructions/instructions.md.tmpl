@@ -1,2 +1,9 @@
 {{- /* Shared user-scope instruction template. Keep comments out of the render. */ -}}
 {{- /* Common instructions for every managed harness go here. */ -}}
+# Orchestration
+
+When work splits into several independent units, prefer orchestration: dispatch Compound Engineering skills or subagents to run the units in parallel. Do small edits and tightly coupled changes yourself, in your own context.
+{{- if .claude }}
+
+Claude Code's `Workflow` tool and Ultracode run only with the user's own opt-in: the `ultracode` keyword, `/effort ultracode`, or an explicit request for a workflow. This instruction is not that opt-in.
+{{- end }}

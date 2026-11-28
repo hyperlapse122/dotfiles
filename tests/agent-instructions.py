@@ -62,7 +62,9 @@ def exercise(template, helper, renderer, kind, receipts):
         assert not (root / '.codex').exists(), 'retired Codex instructions were delivered'
         for harness in DELIVERIES:
             text = body(root, harness)
-            assert text == ''
+            assert text.startswith('# Orchestration\n'), harness
+            assert ('`Workflow`' in text) == (harness == 'claude'), harness
+            assert ('Ultracode' in text) == (harness == 'claude'), harness
             check_receipt(text, receipts, kind, harness)
         source.write_text(template + '\n# Branch probe\n' + ''.join(
             '{{ if .' + harness + ' }}\n' + harness + '-only\n{{ end }}' for harness in DELIVERIES))
@@ -138,7 +140,7 @@ def main():
             run(entry['activation'])
             assert not omp_destination.is_symlink()
             assert omp_destination.is_file()
-            assert omp_destination.read_bytes() == b''
+            assert omp_destination.read_text().startswith('# Orchestration\n')
             assert sentinel.read_text() == 'sentinel instructions\n'
             for path, content in omp_state.items():
                 assert path.read_bytes() == content, path
@@ -153,7 +155,7 @@ def main():
             for harness in DELIVERIES:
                 destination = home / DELIVERIES[harness]
                 assert destination.is_file() and not destination.is_symlink()
-                assert destination.stat().st_size == 0
+                assert destination.stat().st_size > 0
                 receipt(body(home, harness), receipts, entry['kind'], harness)
 
 
