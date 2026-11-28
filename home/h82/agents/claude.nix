@@ -59,7 +59,7 @@ let
     # advisor. Ultracode stays a per-session opt-in: no `ultracode` key.
     model = "sonnet";
     effortLevel = "medium";
-    advisorModel = "fable";
+    advisorModel = "opus";
   };
 
   # Leaves assigned inside nested objects of settings.json. A plugin is enabled

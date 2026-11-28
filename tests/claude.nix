@@ -91,7 +91,7 @@ let
     disableClaudeAiConnectors = true;
     model = "sonnet";
     effortLevel = "medium";
-    advisorModel = "fable";
+    advisorModel = "opus";
   };
 
   retiredKeys = [ ];
@@ -398,7 +398,7 @@ let
                 disableClaudeAiConnectors = true;
                 model = "sonnet";
                 effortLevel = "medium";
-                advisorModel = "fable";
+                advisorModel = "opus";
                 env = {
                   DISABLE_AUTOUPDATER = "1";
                   CLAUDE_CODE_SHELL = "${pkgs.bash}/bin/bash";
