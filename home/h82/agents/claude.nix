@@ -53,10 +53,11 @@ let
     disableClaudeAiConnectors = true;
     # A rebuild resets these three to their declared values, so a /model,
     # /effort, or advisor choice made in a session lasts until the next
-    # switch. The [1m] suffix selects the 1M-token context window, so the
-    # window is declared too. GUI and CLI Claude sessions read this user
-    # settings file, so they get the same advisor.
-    model = "opus[1m]";
+    # switch. The `sonnet` alias resolves to claude-sonnet-5-5, whose context
+    # window is 1M tokens by default, so no [1m] suffix is declared. GUI and
+    # CLI Claude sessions read this user settings file, so they get the same
+    # advisor. Ultracode stays a per-session opt-in: no `ultracode` key.
+    model = "sonnet";
     effortLevel = "medium";
     advisorModel = "fable";
   };

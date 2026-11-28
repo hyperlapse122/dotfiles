@@ -89,7 +89,7 @@ let
     inputNeededNotifEnabled = false;
     cleanupPeriodDays = 30;
     disableClaudeAiConnectors = true;
-    model = "opus[1m]";
+    model = "sonnet";
     effortLevel = "medium";
     advisorModel = "fable";
   };
@@ -396,7 +396,7 @@ let
                 inputNeededNotifEnabled = false;
                 cleanupPeriodDays = 30;
                 disableClaudeAiConnectors = true;
-                model = "opus[1m]";
+                model = "sonnet";
                 effortLevel = "medium";
                 advisorModel = "fable";
                 env = {

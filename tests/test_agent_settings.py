@@ -32,7 +32,7 @@ merger = importlib.util.module_from_spec(spec)
 loader.exec_module(merger)
 
 DECLARED = {
-    'model': 'opus[1m]',
+    'model': 'sonnet',
     'effortLevel': 'medium',
     'language': 'korean',
     'theme': 'auto',
@@ -40,7 +40,7 @@ DECLARED = {
 
 # Declared keys hold other values; the rest is state only the agent writes.
 EXISTING = {
-    'model': 'sonnet',
+    'model': 'opus[1m]',
     'effortLevel': 'xhigh',
     'theme': 'light',
     'themePreference': 'keep-me',
@@ -278,7 +278,7 @@ class MergeTests(unittest.TestCase):
         self.seed({'numStartups': 41})
         self.merge()
         result = self.read()
-        self.assertEqual(result['model'], 'opus[1m]')
+        self.assertEqual(result['model'], 'sonnet')
         self.assertEqual(result['numStartups'], 41)
 
     def test_leaves_no_temporary_file_behind(self):
@@ -313,7 +313,7 @@ class MergeTests(unittest.TestCase):
         self.seed()
         result = self.run_script()
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(self.read()['model'], 'opus[1m]')
+        self.assertEqual(self.read()['model'], 'sonnet')
 
     def test_process_exits_non_zero_and_names_the_path_on_refusal(self):
         self.settings.parent.mkdir(parents=True)
