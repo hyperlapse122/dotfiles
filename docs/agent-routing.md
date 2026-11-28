@@ -1,6 +1,6 @@
 # Agent routing
 
-The shared user-scope template currently contains only comments; the harness and host variables remain available to future content. Normal activation produces byte-empty native instruction files for Claude Code, OpenCode, and omp (`~/.omp/agent/AGENTS.md`). Project instructions, independent harness settings, and shared skills remain active; Claude Code's own settings still select Korean conversation.
+The shared user-scope template renders one `# Orchestration` paragraph for Claude Code, OpenCode, and omp (`~/.omp/agent/AGENTS.md`): when work splits into several independent units, prefer dispatching Compound Engineering skills or subagents, and do small or tightly coupled edits directly. Only the Claude Code render adds a sentence that the `Workflow` tool and Ultracode need the user's own opt-in (the `ultracode` keyword, `/effort ultracode`, or an explicit request for a workflow); the instruction is not that opt-in, and `ultracode` is not declared in Claude Code's settings. The harness and host variables remain available to future content. Project instructions, independent harness settings, and shared skills remain active; Claude Code's own settings still select Korean conversation.
 
 Delegation uses the role, model, and reasoning effort selected by CE or the harness unless the user specifies them.
 
